@@ -175,7 +175,7 @@ mod tests {
     }
 
     fn setup() -> (Contract, VMContextBuilder) {
-        let mut context = VMContextBuilder::new();
+        let context = VMContextBuilder::new();
 
         let contract = Contract::new(
             "Test proposal".to_string(),
@@ -202,6 +202,132 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "Voting has already completed")]
+    fn test_vote_again_after_voting_ends() {
+        // Setup validator and context
+        let validator_id = validator(0);
+        let context = get_context(&validator_id);
+        let validators = HashMap::from_iter(vec![(validator_id.to_string(), NearToken::from_yoctonear(100))].into_iter());
+        testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators);
+        let mut contract = Contract::new("Test proposal".to_string(), env::block_timestamp_ms() + 1000);
+        contract.vote(true);
+        assert!(contract.get_result().is_some());
+        contract.vote(true); // Should panic because voting has ended
+    }
+
+    #[test]
+    fn test_voting_simple() {
+        let validators: HashMap<String, NearToken> = (0..10)
+            .map(|i| (format!("validator-{}", i), NearToken::from_yoctonear(10)))
+            .collect();
+        let context = get_context(&validator(0));
+        testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+        let mut contract = Contract::new("Test proposal".to_string(), env::block_timestamp_ms() + 1000);
+
+        for i in 0..7 {
+            let voter = validator(i);
+            let context = get_context(&voter);
+            testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+            contract.vote(true);
+            // Simulate view context (not strictly necessary for this contract, but for parity with original)
+            // let mut context = get_context(&voter);
+            // context.is_view = true;
+            // testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+            assert_eq!(
+                contract.get_total_voted_stake(),
+                (U128::from(10 * (i + 1) as u128), U128::from(100))
+            );
+            let expected_votes: HashMap<AccountId, U128> = (0..=i)
+                .map(|j| (validator(j), U128::from(10)))
+                .collect();
+            assert_eq!(contract.get_votes(), expected_votes);
+            assert_eq!(contract.get_votes().len() as u64, i + 1);
+            if i < 6 {
+                assert!(contract.get_result().is_none());
+            } else {
+                assert!(contract.get_result().is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn test_voting_with_epoch_change() {
+        let validators: HashMap<String, NearToken> = (0..10)
+            .map(|i| (format!("validator-{}", i), NearToken::from_yoctonear(10)))
+            .collect();
+        let context = get_context(&validator(0));
+        testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+        let mut contract = Contract::new("Test proposal".to_string(), env::block_timestamp_ms() + 1000);
+
+        for i in 0..7 {
+            let voter = validator(i);
+            let context = get_context_with_epoch_height(&voter, i);
+            testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+            contract.vote(true);
+            assert_eq!(contract.get_votes().len() as u64, i + 1);
+            if i < 6 {
+                assert!(contract.get_result().is_none());
+            } else {
+                assert!(contract.get_result().is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn test_validator_stake_change() {
+        let mut validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
+            (validator(1).to_string(), NearToken::from_yoctonear(40)),
+            (validator(2).to_string(), NearToken::from_yoctonear(10)),
+            (validator(3).to_string(), NearToken::from_yoctonear(10)),
+        ]);
+        let context = get_context_with_epoch_height(&validator(1), 1);
+        testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+        let mut contract = Contract::new("Test proposal".to_string(), env::block_timestamp_ms() + 1000);
+        contract.vote(true);
+        validators.insert(validator(1).to_string(), NearToken::from_yoctonear(50));
+        let context = get_context_with_epoch_height(&validator(2), 2);
+        testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+        contract.ping();
+        assert!(contract.get_result().is_some());
+    }
+
+    #[test]
+    fn test_withdraw_votes() {
+        let validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
+            (validator(1).to_string(), NearToken::from_yoctonear(10)),
+            (validator(2).to_string(), NearToken::from_yoctonear(10)),
+        ]);
+        let context = get_context_with_epoch_height(&validator(1), 1);
+        testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+        let mut contract = Contract::new("Test proposal".to_string(), env::block_timestamp_ms() + 1000);
+        contract.vote(true);
+        assert_eq!(contract.get_votes().len(), 1);
+        let context = get_context_with_epoch_height(&validator(1), 2);
+        testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+        contract.vote(false);
+        assert!(contract.get_votes().is_empty());
+    }
+
+    #[test]
+    fn test_validator_kick_out() {
+        let mut validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
+            (validator(1).to_string(), NearToken::from_yoctonear(40)),
+            (validator(2).to_string(), NearToken::from_yoctonear(10)),
+            (validator(3).to_string(), NearToken::from_yoctonear(10)),
+        ]);
+        let context = get_context_with_epoch_height(&validator(1), 1);
+        testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+        let mut contract = Contract::new("Test proposal".to_string(), env::block_timestamp_ms() + 1000);
+        contract.vote(true);
+        assert_eq!((contract.get_total_voted_stake().0).0, 40);
+        validators.remove(&validator(1).to_string());
+        let context = get_context_with_epoch_height(&validator(2), 2);
+        testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+        contract.ping();
+        assert_eq!((contract.get_total_voted_stake().0).0, 0);
+    }
+
+    #[test]
     fn test_get_proposal() {
         let (contract, _) = setup();
         assert_eq!(contract.get_proposal(), "Test proposal");
@@ -216,7 +342,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Proposal cannot be empty")]
     fn test_empty_proposal() {
-        let mut context = VMContextBuilder::new();
+        let context = VMContextBuilder::new();
         testing_env!(context.build());
         Contract::new("".to_string(), env::block_timestamp_ms() + 1000);
     }
@@ -224,7 +350,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Deadline must be in the future")]
     fn test_past_deadline() {
-        let mut context = VMContextBuilder::new();
+        let context = VMContextBuilder::new();
         testing_env!(context.build());
         Contract::new("Test proposal".to_string(), env::block_timestamp_ms());
     }
