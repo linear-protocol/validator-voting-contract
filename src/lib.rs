@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "is not a validator")]
-    fn test_nonvalidator_cannot_vote() {
+    fn test_non_validator_cannot_vote() {
         let context = get_context(&validator(3));
         let validators = HashMap::from_iter(vec![
             (validator(0).to_string(), NearToken::from_yoctonear(100)),
