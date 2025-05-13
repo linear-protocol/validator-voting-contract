@@ -45,7 +45,7 @@ impl Contract {
             env::block_timestamp_ms() < self.deadline_timestamp_ms,
             "Voting deadline has already passed"
         );
-        require!(self.result.is_none(), "Voting has already completed");
+        require!(self.result.is_none(), "Voting has already ended");
 
         self.ping();
         let account_id = env::predecessor_account_id();
@@ -106,7 +106,7 @@ impl Contract {
         }
     }
 
-    /// Returns current a pair of `total_voted_stake` and the total stake.
+    /// Returns a pair of `total_voted_stake` and the total stake.
     /// Note: as a view method, it doesn't recompute the active stake. May need to call `ping` to
     /// update the active stake.
     pub fn get_total_voted_stake(&self) -> (U128, U128) {
@@ -127,12 +127,12 @@ impl Contract {
     }
 
     /// Get the timestamp of when the voting finishes. `None` means the voting hasn't ended yet.
-    pub const fn get_result(&self) -> Option<Timestamp> {
+    pub fn get_result(&self) -> Option<Timestamp> {
         self.result
     }
 
     /// Returns the deadline timestamp in milliseconds.
-    pub const fn get_deadline_timestamp(&self) -> Timestamp {
+    pub fn get_deadline_timestamp(&self) -> Timestamp {
         self.deadline_timestamp_ms
     }
 
@@ -169,31 +169,19 @@ mod tests {
         VMContextBuilder::new()
             .current_account_id(accounts(0))
             .signer_account_id(accounts(1))
-            // .signer_account_pk(vec![0, 1, 2])
             .predecessor_account_id(predecessor_account_id.clone())
-            // .block_index(0)
-            // .block_timestamp(0)
-            // .account_balance(0)
-            // .account_locked_balance(0)
             .storage_usage(1000)
-            // .attached_deposit(0)
             .prepaid_gas(Gas::from_tgas(200))
-            // .random_seed(vec![0, 1, 2])
             .is_view(false)
-            // .output_data_receivers(vec![])
             .epoch_height(epoch_height)
             .clone()
     }
 
-    fn setup() -> (Contract, VMContextBuilder) {
-        let context = VMContextBuilder::new();
-
-        let contract = Contract::new(
+    fn get_contract() -> Contract {
+        Contract::new(
             "Test proposal".to_string(),
-            env::block_timestamp_ms() + 1000, // 1 second deadline
-        );
-
-        (contract, context)
+            env::block_timestamp_ms() + 1000,
+        )
     }
 
     #[test]
@@ -210,17 +198,13 @@ mod tests {
             RuntimeFeesConfig::test(),
             validators
         );
-        let mut contract = Contract::new(
-            "Test proposal".to_string(),
-            env::block_timestamp_ms() + 1000,
-        );
+        let mut contract = get_contract();
         contract.vote(true);
     }
 
     #[test]
-    #[should_panic(expected = "Voting has already completed")]
+    #[should_panic(expected = "Voting has already ended")]
     fn test_vote_again_after_voting_ends() {
-        // Setup validator and context
         let validator_id = validator(0);
         let context = get_context(&validator_id);
         let validators = HashMap::from_iter(vec![(
@@ -233,54 +217,55 @@ mod tests {
             RuntimeFeesConfig::test(),
             validators
         );
-        let mut contract = Contract::new(
-            "Test proposal".to_string(),
-            env::block_timestamp_ms() + 1000,
-        );
+        let mut contract = get_contract();
+        // vote
         contract.vote(true);
         assert!(contract.get_result().is_some());
-        contract.vote(true); // Should panic because voting has ended
+        // vote again. should panic because voting has ended
+        contract.vote(true);
     }
 
     #[test]
     fn test_voting_simple() {
-        let validators: HashMap<String, NearToken> = (0..10)
-            .map(|i| (format!("validator-{}", i), NearToken::from_yoctonear(10)))
-            .collect();
         let context = get_context(&validator(0));
         testing_env!(
             context.build(),
             test_vm_config(),
             RuntimeFeesConfig::test(),
-            validators.clone()
+            validators()
         );
-        let mut contract = Contract::new(
-            "Test proposal".to_string(),
-            env::block_timestamp_ms() + 1000,
-        );
+        let mut contract = get_contract();
 
         for i in 0..7 {
+            // vote by each validator
             let voter = validator(i);
-            let context = get_context(&voter);
+            let mut context = get_context(&voter);
             testing_env!(
                 context.build(),
                 test_vm_config(),
                 RuntimeFeesConfig::test(),
-                validators.clone()
+                validators()
             );
             contract.vote(true);
-            // Simulate view context (not strictly necessary for this contract, but for parity with original)
-            // let mut context = get_context(&voter);
-            // context.is_view = true;
-            // testing_env!(context.build(), test_vm_config(), RuntimeFeesConfig::test(), validators.clone());
+
+            // check total voted stake
+            context.is_view(true);
+            testing_env!(
+                context.build(),
+                test_vm_config(),
+                RuntimeFeesConfig::test(),
+                validators()
+            );
             assert_eq!(
                 contract.get_total_voted_stake(),
                 (U128::from(10 * (i + 1) as u128), U128::from(100))
             );
+            // check votes
             let expected_votes: HashMap<AccountId, U128> =
                 (0..=i).map(|j| (validator(j), U128::from(10))).collect();
             assert_eq!(contract.get_votes(), expected_votes);
             assert_eq!(contract.get_votes().len() as u64, i + 1);
+            // check voting result
             if i < 6 {
                 assert!(contract.get_result().is_none());
             } else {
@@ -291,32 +276,28 @@ mod tests {
 
     #[test]
     fn test_voting_with_epoch_change() {
-        let validators: HashMap<String, NearToken> = (0..10)
-            .map(|i| (format!("validator-{}", i), NearToken::from_yoctonear(10)))
-            .collect();
         let context = get_context(&validator(0));
         testing_env!(
             context.build(),
             test_vm_config(),
             RuntimeFeesConfig::test(),
-            validators.clone()
+            validators()
         );
-        let mut contract = Contract::new(
-            "Test proposal".to_string(),
-            env::block_timestamp_ms() + 1000,
-        );
+        let mut contract = get_contract();
 
         for i in 0..7 {
-            let voter = validator(i);
-            let context = get_context_with_epoch_height(&voter, i);
+            // vote by each validator
+            let context = get_context_with_epoch_height(&validator(i), i);
             testing_env!(
                 context.build(),
                 test_vm_config(),
                 RuntimeFeesConfig::test(),
-                validators.clone()
+                validators()
             );
             contract.vote(true);
+            // check votes
             assert_eq!(contract.get_votes().len() as u64, i + 1);
+            // check voting result
             if i < 6 {
                 assert!(contract.get_result().is_none());
             } else {
@@ -332,6 +313,7 @@ mod tests {
             (validator(2).to_string(), NearToken::from_yoctonear(10)),
             (validator(3).to_string(), NearToken::from_yoctonear(10)),
         ]);
+        // vote at epoch 1
         let context = get_context_with_epoch_height(&validator(1), 1);
         testing_env!(
             context.build(),
@@ -339,11 +321,9 @@ mod tests {
             RuntimeFeesConfig::test(),
             validators.clone()
         );
-        let mut contract = Contract::new(
-            "Test proposal".to_string(),
-            env::block_timestamp_ms() + 1000,
-        );
+        let mut contract = get_contract();
         contract.vote(true);
+        // ping at epoch 2
         validators.insert(validator(1).to_string(), NearToken::from_yoctonear(50));
         let context = get_context_with_epoch_height(&validator(2), 2);
         testing_env!(
@@ -369,12 +349,11 @@ mod tests {
             RuntimeFeesConfig::test(),
             validators.clone()
         );
-        let mut contract = Contract::new(
-            "Test proposal".to_string(),
-            env::block_timestamp_ms() + 1000,
-        );
+        let mut contract = get_contract();
+        // vote at epoch 1
         contract.vote(true);
         assert_eq!(contract.get_votes().len(), 1);
+        // withdraw vote at epoch 2
         let context = get_context_with_epoch_height(&validator(1), 2);
         testing_env!(
             context.build(),
@@ -400,12 +379,11 @@ mod tests {
             RuntimeFeesConfig::test(),
             validators.clone()
         );
-        let mut contract = Contract::new(
-            "Test proposal".to_string(),
-            env::block_timestamp_ms() + 1000,
-        );
+        let mut contract = get_contract();
+        // vote at epoch 1
         contract.vote(true);
         assert_eq!((contract.get_total_voted_stake().0).0, 40);
+        // remove validator at epoch 2
         validators.remove(&validator(1).to_string());
         let context = get_context_with_epoch_height(&validator(2), 2);
         testing_env!(
@@ -414,19 +392,15 @@ mod tests {
             RuntimeFeesConfig::test(),
             validators.clone()
         );
+        // ping will update total voted stake
         contract.ping();
         assert_eq!((contract.get_total_voted_stake().0).0, 0);
     }
 
     #[test]
-    fn test_get_proposal() {
-        let (contract, _) = setup();
+    fn test_init_contract() {
+        let contract = get_contract();
         assert_eq!(contract.get_proposal(), "Test proposal");
-    }
-
-    #[test]
-    fn test_get_deadline_timestamp() {
-        let (contract, _) = setup();
         assert_eq!(
             contract.get_deadline_timestamp(),
             env::block_timestamp_ms() + 1000
@@ -435,7 +409,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Proposal cannot be empty")]
-    fn test_empty_proposal() {
+    fn test_init_with_empty_proposal() {
         let context = VMContextBuilder::new();
         testing_env!(context.build());
         Contract::new("".to_string(), env::block_timestamp_ms() + 1000);
@@ -443,7 +417,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Deadline must be in the future")]
-    fn test_past_deadline() {
+    fn test_init_with_past_deadline() {
         let context = VMContextBuilder::new();
         testing_env!(context.build());
         Contract::new("Test proposal".to_string(), env::block_timestamp_ms());
@@ -452,19 +426,46 @@ mod tests {
     #[test]
     #[should_panic(expected = "Voting deadline has already passed")]
     fn test_vote_after_deadline() {
-        let (mut contract, mut context) = setup();
+        let mut contract = get_contract();
+        let mut context = get_context(&validator(0));
 
-        // Move time past deadline
+        // vote after deadline
         testing_env!(
             context
                 .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
-                .predecessor_account_id(validator(0))
                 .build(),
             test_vm_config(),
             RuntimeFeesConfig::test(),
             validators()
         );
-
         contract.vote(true);
+    }
+
+    #[test]
+    #[should_panic(expected = "Voting deadline has already passed")]
+    fn test_ping_after_deadline() {
+        let mut contract = get_contract();
+        let mut context = get_context(&validator(0));
+
+        // vote at epoch 1
+        testing_env!(
+            context.build(),
+            test_vm_config(),
+            RuntimeFeesConfig::test(),
+            validators()
+        );
+        contract.vote(true);
+
+        // ping at epoch 2 after deadline
+        testing_env!(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(2)
+                .build(),
+            test_vm_config(),
+            RuntimeFeesConfig::test(),
+            validators()
+        );
+        contract.ping();
     }
 }
