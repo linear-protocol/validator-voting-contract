@@ -184,6 +184,27 @@ mod tests {
         )
     }
 
+    fn set_context(context: &VMContextBuilder) {
+        testing_env!(
+            context.build(),
+            test_vm_config(),
+            RuntimeFeesConfig::test(),
+            validators()
+        );
+    }
+
+    fn set_context_and_validators(
+        context: &VMContextBuilder,
+        validators: &HashMap<String, NearToken>,
+    ) {
+        testing_env!(
+            context.build(),
+            test_vm_config(),
+            RuntimeFeesConfig::test(),
+            validators.clone()
+        );
+    }
+
     #[test]
     #[should_panic(expected = "is not a validator")]
     fn test_nonvalidator_cannot_vote() {
@@ -192,12 +213,7 @@ mod tests {
             (validator(0).to_string(), NearToken::from_yoctonear(100)),
             (validator(1).to_string(), NearToken::from_yoctonear(100)),
         ]);
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators
-        );
+        set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         contract.vote(true);
     }
@@ -211,12 +227,7 @@ mod tests {
             validator_id.to_string(),
             NearToken::from_yoctonear(100),
         )]);
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators
-        );
+        set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote
         contract.vote(true);
@@ -228,34 +239,19 @@ mod tests {
     #[test]
     fn test_voting_simple() {
         let context = get_context(&validator(0));
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators()
-        );
+        set_context(&context);
         let mut contract = get_contract();
 
         for i in 0..7 {
             // vote by each validator
             let voter = validator(i);
             let mut context = get_context(&voter);
-            testing_env!(
-                context.build(),
-                test_vm_config(),
-                RuntimeFeesConfig::test(),
-                validators()
-            );
+            set_context(&context);
             contract.vote(true);
 
             // check total voted stake
             context.is_view(true);
-            testing_env!(
-                context.build(),
-                test_vm_config(),
-                RuntimeFeesConfig::test(),
-                validators()
-            );
+            set_context(&context);
             assert_eq!(
                 contract.get_total_voted_stake(),
                 (U128::from(10 * (i + 1) as u128), U128::from(100))
@@ -277,23 +273,13 @@ mod tests {
     #[test]
     fn test_voting_with_epoch_change() {
         let context = get_context(&validator(0));
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators()
-        );
+        set_context(&context);
         let mut contract = get_contract();
 
         for i in 0..7 {
             // vote by each validator
             let context = get_context_with_epoch_height(&validator(i), i);
-            testing_env!(
-                context.build(),
-                test_vm_config(),
-                RuntimeFeesConfig::test(),
-                validators()
-            );
+            set_context(&context);
             contract.vote(true);
             // check votes
             assert_eq!(contract.get_votes().len() as u64, i + 1);
@@ -315,23 +301,13 @@ mod tests {
         ]);
         // vote at epoch 1
         let context = get_context_with_epoch_height(&validator(1), 1);
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators.clone()
-        );
+        set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         contract.vote(true);
         // ping at epoch 2
         validators.insert(validator(1).to_string(), NearToken::from_yoctonear(50));
         let context = get_context_with_epoch_height(&validator(2), 2);
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators.clone()
-        );
+        set_context_and_validators(&context, &validators);
         contract.ping();
         assert!(contract.get_result().is_some());
     }
@@ -343,24 +319,14 @@ mod tests {
             (validator(2).to_string(), NearToken::from_yoctonear(10)),
         ]);
         let context = get_context_with_epoch_height(&validator(1), 1);
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators.clone()
-        );
+        set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote at epoch 1
         contract.vote(true);
         assert_eq!(contract.get_votes().len(), 1);
         // withdraw vote at epoch 2
         let context = get_context_with_epoch_height(&validator(1), 2);
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators
-        );
+        set_context_and_validators(&context, &validators);
         contract.vote(false);
         assert!(contract.get_votes().is_empty());
     }
@@ -373,12 +339,7 @@ mod tests {
             (validator(3).to_string(), NearToken::from_yoctonear(10)),
         ]);
         let context = get_context_with_epoch_height(&validator(1), 1);
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators.clone()
-        );
+        set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote at epoch 1
         contract.vote(true);
@@ -386,12 +347,7 @@ mod tests {
         // remove validator at epoch 2
         validators.remove(&validator(1).to_string());
         let context = get_context_with_epoch_height(&validator(2), 2);
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators.clone()
-        );
+        set_context_and_validators(&context, &validators);
         // ping will update total voted stake
         contract.ping();
         assert_eq!((contract.get_total_voted_stake().0).0, 0);
@@ -411,7 +367,7 @@ mod tests {
     #[should_panic(expected = "Proposal cannot be empty")]
     fn test_init_with_empty_proposal() {
         let context = VMContextBuilder::new();
-        testing_env!(context.build());
+        set_context(&context);
         Contract::new("".to_string(), env::block_timestamp_ms() + 1000);
     }
 
@@ -419,7 +375,7 @@ mod tests {
     #[should_panic(expected = "Deadline must be in the future")]
     fn test_init_with_past_deadline() {
         let context = VMContextBuilder::new();
-        testing_env!(context.build());
+        set_context(&context);
         Contract::new("Test proposal".to_string(), env::block_timestamp_ms());
     }
 
@@ -430,14 +386,7 @@ mod tests {
         let mut context = get_context(&validator(0));
 
         // vote after deadline
-        testing_env!(
-            context
-                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
-                .build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators()
-        );
+        set_context(&context.block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000));
         contract.vote(true);
     }
 
@@ -448,23 +397,14 @@ mod tests {
         let mut context = get_context(&validator(0));
 
         // vote at epoch 1
-        testing_env!(
-            context.build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators()
-        );
+        set_context(&context);
         contract.vote(true);
 
         // ping at epoch 2 after deadline
-        testing_env!(
-            context
+        set_context(
+            &context
                 .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
-                .epoch_height(2)
-                .build(),
-            test_vm_config(),
-            RuntimeFeesConfig::test(),
-            validators()
+                .epoch_height(2),
         );
         contract.ping();
     }
