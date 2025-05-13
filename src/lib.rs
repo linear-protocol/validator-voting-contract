@@ -149,7 +149,7 @@ mod tests {
     use near_sdk::{env, test_vm_config, testing_env, Gas, NearToken, RuntimeFeesConfig};
 
     fn validators() -> HashMap<String, NearToken> {
-        (0..10)
+        (0..300)
             .map(|i| (format!("validator-{}", i), NearToken::from_yoctonear(10)))
             .collect::<HashMap<_, _>>()
     }
@@ -242,7 +242,7 @@ mod tests {
         set_context(&context);
         let mut contract = get_contract();
 
-        for i in 0..7 {
+        for i in 0..201 {
             // vote by each validator
             let voter = validator(i);
             let mut context = get_context(&voter);
@@ -254,7 +254,7 @@ mod tests {
             set_context(&context);
             assert_eq!(
                 contract.get_total_voted_stake(),
-                (U128::from(10 * (i + 1) as u128), U128::from(100))
+                (U128::from(10 * (i + 1) as u128), U128::from(3000))
             );
             // check votes
             let expected_votes: HashMap<AccountId, U128> =
@@ -262,7 +262,7 @@ mod tests {
             assert_eq!(contract.get_votes(), expected_votes);
             assert_eq!(contract.get_votes().len() as u64, i + 1);
             // check voting result
-            if i < 6 {
+            if i < 200 {
                 assert!(contract.get_result().is_none());
             } else {
                 assert!(contract.get_result().is_some());
@@ -276,7 +276,7 @@ mod tests {
         set_context(&context);
         let mut contract = get_contract();
 
-        for i in 0..7 {
+        for i in 0..201 {
             // vote by each validator
             let context = get_context_with_epoch_height(&validator(i), i);
             set_context(&context);
@@ -284,7 +284,7 @@ mod tests {
             // check votes
             assert_eq!(contract.get_votes().len() as u64, i + 1);
             // check voting result
-            if i < 6 {
+            if i < 200 {
                 assert!(contract.get_result().is_none());
             } else {
                 assert!(contract.get_result().is_some());
