@@ -28,7 +28,7 @@ impl Contract {
             deadline_timestamp_ms > env::block_timestamp_ms(),
             "Deadline must be in the future"
         );
-        Contract {
+        Self {
             proposal,
             deadline_timestamp_ms,
             votes: HashMap::new(),
@@ -127,12 +127,12 @@ impl Contract {
     }
 
     /// Get the timestamp of when the voting finishes. `None` means the voting hasn't ended yet.
-    pub fn get_result(&self) -> Option<Timestamp> {
+    pub const fn get_result(&self) -> Option<Timestamp> {
         self.result
     }
 
     /// Returns the deadline timestamp in milliseconds.
-    pub fn get_deadline_timestamp(&self) -> Timestamp {
+    pub const fn get_deadline_timestamp(&self) -> Timestamp {
         self.deadline_timestamp_ms
     }
 
@@ -167,8 +167,8 @@ mod tests {
         epoch_height: EpochHeight,
     ) -> VMContextBuilder {
         VMContextBuilder::new()
-            .current_account_id(accounts(0).clone())
-            .signer_account_id(accounts(1).clone())
+            .current_account_id(accounts(0))
+            .signer_account_id(accounts(1))
             // .signer_account_pk(vec![0, 1, 2])
             .predecessor_account_id(predecessor_account_id.clone())
             // .block_index(0)
@@ -200,13 +200,10 @@ mod tests {
     #[should_panic(expected = "is not a validator")]
     fn test_nonvalidator_cannot_vote() {
         let context = get_context(&validator(3));
-        let validators = HashMap::from_iter(
-            vec![
-                (validator(0).to_string(), NearToken::from_yoctonear(100)),
-                (validator(1).to_string(), NearToken::from_yoctonear(100)),
-            ]
-            .into_iter(),
-        );
+        let validators = HashMap::from_iter(vec![
+            (validator(0).to_string(), NearToken::from_yoctonear(100)),
+            (validator(1).to_string(), NearToken::from_yoctonear(100)),
+        ]);
         testing_env!(
             context.build(),
             test_vm_config(),
@@ -226,9 +223,10 @@ mod tests {
         // Setup validator and context
         let validator_id = validator(0);
         let context = get_context(&validator_id);
-        let validators = HashMap::from_iter(
-            vec![(validator_id.to_string(), NearToken::from_yoctonear(100))].into_iter(),
-        );
+        let validators = HashMap::from_iter(vec![(
+            validator_id.to_string(),
+            NearToken::from_yoctonear(100),
+        )]);
         testing_env!(
             context.build(),
             test_vm_config(),
@@ -382,7 +380,7 @@ mod tests {
             context.build(),
             test_vm_config(),
             RuntimeFeesConfig::test(),
-            validators.clone()
+            validators
         );
         contract.vote(false);
         assert!(contract.get_votes().is_empty());
