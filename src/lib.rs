@@ -35,37 +35,6 @@ impl Contract {
         }
     }
 
-    /// Ping to update the votes according to current stake of validators.
-    pub fn ping(&mut self) {
-        require!(self.result.is_none(), "Voting has already ended");
-        let cur_epoch_height = env::epoch_height();
-        if cur_epoch_height != self.last_epoch_height {
-            let votes = std::mem::take(&mut self.votes);
-            self.total_voted_stake = 0;
-            for (account_id, _) in votes {
-                let account_current_stake = env::validator_stake(&account_id).as_yoctonear();
-                self.total_voted_stake += account_current_stake;
-                if account_current_stake > 0 {
-                    self.votes.insert(account_id, account_current_stake);
-                }
-            }
-            self.check_result();
-            self.last_epoch_height = cur_epoch_height;
-        }
-    }
-
-    /// Check whether the voting has ended.
-    fn check_result(&mut self) {
-        require!(
-            self.result.is_none(),
-            "check result is called after result is already set"
-        );
-        let total_stake = env::validator_total_stake().as_yoctonear();
-        if self.total_voted_stake > total_stake * 2 / 3 {
-            self.result = Some(env::block_timestamp_ms());
-        }
-    }
-
     /// Method for validators to vote or withdraw the vote.
     /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
     pub fn vote(&mut self, is_vote: bool) {
@@ -93,6 +62,41 @@ impl Contract {
         if account_stake > 0 {
             self.votes.insert(account_id, account_stake);
             self.check_result();
+        }
+    }
+
+    /// Ping to update the votes according to current stake of validators.
+    pub fn ping(&mut self) {
+        require!(
+            env::block_timestamp_ms() < self.deadline_timestamp_ms,
+            "Voting deadline has already passed"
+        );
+        require!(self.result.is_none(), "Voting has already ended");
+        let cur_epoch_height = env::epoch_height();
+        if cur_epoch_height != self.last_epoch_height {
+            let votes = std::mem::take(&mut self.votes);
+            self.total_voted_stake = 0;
+            for (account_id, _) in votes {
+                let account_current_stake = env::validator_stake(&account_id).as_yoctonear();
+                self.total_voted_stake += account_current_stake;
+                if account_current_stake > 0 {
+                    self.votes.insert(account_id, account_current_stake);
+                }
+            }
+            self.check_result();
+            self.last_epoch_height = cur_epoch_height;
+        }
+    }
+
+    /// Check whether the voting has ended.
+    fn check_result(&mut self) {
+        require!(
+            self.result.is_none(),
+            "check result is called after result is already set"
+        );
+        let total_stake = env::validator_total_stake().as_yoctonear();
+        if self.total_voted_stake > total_stake * 2 / 3 {
+            self.result = Some(env::block_timestamp_ms());
         }
     }
 
