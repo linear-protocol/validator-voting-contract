@@ -158,6 +158,13 @@ mod tests {
         format!("validator-{}", id).parse().unwrap()
     }
 
+    fn get_contract() -> Contract {
+        Contract::new(
+            "Test proposal".to_string(),
+            env::block_timestamp_ms() + 1000,
+        )
+    }
+
     fn get_context(predecessor_account_id: &AccountId) -> VMContextBuilder {
         get_context_with_epoch_height(predecessor_account_id, 0)
     }
@@ -175,13 +182,6 @@ mod tests {
             .is_view(false)
             .epoch_height(epoch_height)
             .clone()
-    }
-
-    fn get_contract() -> Contract {
-        Contract::new(
-            "Test proposal".to_string(),
-            env::block_timestamp_ms() + 1000,
-        )
     }
 
     fn set_context(context: &VMContextBuilder) {
