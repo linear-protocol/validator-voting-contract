@@ -1,8 +1,11 @@
 use near_sdk::json_types::U128;
-use near_sdk::{env, near, require, AccountId, EpochHeight, Timestamp};
+use near_sdk::{env, near, require, AccountId, EpochHeight};
 use std::collections::HashMap;
 
+/// Balance in yocto NEAR
 type Balance = u128;
+/// Timestamp in milliseconds
+type Timestamp = u64;
 
 /// Voting contract for any specific proposal. Once the majority of the stake holders agree to
 /// the proposal, the time will be recorded and the voting ends.
@@ -41,12 +44,6 @@ impl Contract {
     /// Method for validators to vote or withdraw the vote.
     /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
     pub fn vote(&mut self, is_vote: bool) {
-        require!(
-            env::block_timestamp_ms() < self.deadline_timestamp_ms,
-            "Voting deadline has already passed"
-        );
-        require!(self.result.is_none(), "Voting has already ended");
-
         self.ping();
         let account_id = env::predecessor_account_id();
         let account_stake = if is_vote {
@@ -344,6 +341,7 @@ mod tests {
         // vote at epoch 1
         contract.vote(true);
         assert_eq!((contract.get_total_voted_stake().0).0, 40);
+        assert_eq!(contract.get_votes().len(), 1);
         // remove validator at epoch 2
         validators.remove(&validator(1).to_string());
         let context = get_context_with_epoch_height(&validator(2), 2);
@@ -351,6 +349,7 @@ mod tests {
         // ping will update total voted stake
         contract.ping();
         assert_eq!((contract.get_total_voted_stake().0).0, 0);
+        assert_eq!(contract.get_votes().len(), 0);
     }
 
     #[test]
