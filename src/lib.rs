@@ -1,6 +1,9 @@
-use near_sdk::json_types::U128;
+use near_sdk::json_types::{U128, U64};
 use near_sdk::{env, near, require, AccountId, EpochHeight};
 use std::collections::HashMap;
+
+mod events;
+use crate::events::Event;
 
 /// Balance in yocto NEAR
 type Balance = u128;
@@ -63,8 +66,20 @@ impl Contract {
         );
         self.total_voted_stake = self.total_voted_stake + account_stake - voted_stake;
         if account_stake > 0 {
-            self.votes.insert(account_id, account_stake);
+            self.votes.insert(account_id.clone(), account_stake);
             self.check_result();
+        }
+        // emit event
+        if is_vote {
+            Event::Voted {
+                validator_id: &account_id,
+            }
+            .emit();
+        } else {
+            Event::VoteWithdrawn {
+                validator_id: &account_id,
+            }
+            .emit();
         }
     }
 
@@ -100,6 +115,15 @@ impl Contract {
         let total_stake = env::validator_total_stake().as_yoctonear();
         if self.total_voted_stake > total_stake * 2 / 3 {
             self.result = Some(env::block_timestamp_ms());
+            Event::ProposalApproved {
+                proposal: &self.proposal,
+                approval_timestamp_ms: &U64::from(env::block_timestamp_ms()),
+                deadline_timestamp_ms: &U64::from(self.deadline_timestamp_ms),
+                voted_stake: &U128::from(self.total_voted_stake),
+                total_stake: &U128::from(total_stake),
+                num_votes: &U64::from(self.votes.len() as u64),
+            }
+            .emit();
         }
     }
 
