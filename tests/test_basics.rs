@@ -23,7 +23,7 @@ async fn test_initialization(contract_wasm: &[u8]) -> Result<(), Box<dyn std::er
         .call("new")
         .args_json(json!({
             "proposal": proposal,
-            "deadline_timestamp_md": deadline_timestamp_ms,
+            "deadline_timestamp_ms": deadline_timestamp_ms,
         }))
         .transact()
         .await?;
