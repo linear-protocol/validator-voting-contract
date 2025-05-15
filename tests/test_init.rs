@@ -5,7 +5,8 @@ use utils::*;
 
 #[tokio::test]
 async fn test_initialization() -> Result<(), Box<dyn std::error::Error>> {
-    let (contract, _, init_args) = deploy_voting_contract().await?;
+    let sandbox = near_workspaces::sandbox().await?;
+    let (contract, init_args) = deploy_voting_contract(&sandbox).await?;
 
     let contract_deadline = contract
         .view("get_deadline_timestamp")

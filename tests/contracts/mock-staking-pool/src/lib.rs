@@ -1,6 +1,9 @@
-use near_sdk::{near, env, AccountId, Gas, require, ext_contract, PublicKey, Promise, BorshStorageKey, NearToken, PanicOnDefault};
-use near_sdk::store::LookupMap;
 use near_sdk::json_types::U128;
+use near_sdk::store::LookupMap;
+use near_sdk::{
+    env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
+    Promise, PublicKey,
+};
 
 type Balance = u128;
 
@@ -14,7 +17,7 @@ trait VotingContract {
 #[near]
 #[derive(BorshStorageKey)]
 pub enum Prefix {
-    Accounts
+    Accounts,
 }
 
 #[near(contract_state)]
@@ -40,7 +43,7 @@ impl MockStakingPool {
     }
 
     #[payable]
-    pub fn stake(&mut self) {
+    pub fn stake(&mut self) -> Promise {
         let amount = env::attached_deposit().as_yoctonear();
         require!(amount > 0u128, "Invalid stake amount");
 
@@ -49,10 +52,10 @@ impl MockStakingPool {
         self.accounts.insert(account_id, balance + amount);
         self.total_staked_balance += amount;
 
-        self.internal_restake();
+        self.internal_restake()
     }
 
-    pub fn unstake(&mut self, amount: U128) {
+    pub fn unstake(&mut self, amount: U128) -> Promise {
         let amount = amount.0;
         require!(amount > 0u128, "Invalid unstake amount");
 
@@ -63,7 +66,7 @@ impl MockStakingPool {
         self.accounts.insert(account_id, balance - amount);
         self.total_staked_balance -= amount;
 
-        self.internal_restake();
+        self.internal_restake()
     }
 
     /// Owner's method.
@@ -75,13 +78,22 @@ impl MockStakingPool {
             .vote(is_vote)
     }
 
+    pub fn get_staked_balance(&self) -> (U128, U128) {
+        (
+            U128::from(env::validator_stake(&env::current_account_id()).as_yoctonear()),
+            U128::from(self.total_staked_balance)
+        )
+    }
+
     fn internal_account_staked_balance(&self, account_id: &AccountId) -> Balance {
         *self.accounts.get(account_id).unwrap_or(&0u128)
     }
 
-    fn internal_restake(&self) {
-        Promise::new(env::current_account_id())
-            .stake(NearToken::from_yoctonear(self.total_staked_balance), self.stake_public_key.clone());
+    fn internal_restake(&self) -> Promise {
+        Promise::new(env::current_account_id()).stake(
+            NearToken::from_yoctonear(self.total_staked_balance),
+            self.stake_public_key.clone(),
+        )
     }
 
     fn assert_owner(&self) {
