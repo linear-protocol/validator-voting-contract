@@ -46,7 +46,11 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
         .view("get_staked_balance")
         .args_json(json!({}))
         .await?;
-    println!("user account: {}, {:#?}", alice.id(), staked_balance.json::<(String, String)>()?);
+    println!(
+        "user account: {}, {:#?}",
+        alice.id(),
+        staked_balance.json::<(String, String)>()?
+    );
 
     let outcome = owner
         .call(staking_pool_contract.id(), "vote")
