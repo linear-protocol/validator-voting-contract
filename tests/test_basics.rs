@@ -18,7 +18,8 @@ async fn test_initialization(contract_wasm: &[u8]) -> Result<(), Box<dyn std::er
     let deadline_timestamp_ms = (SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_millis() + 10 * 60 * 1000) as u64;
+        .as_millis()
+        + 10 * 60 * 1000) as u64;
     let _ = contract
         .call("new")
         .args_json(json!({
@@ -28,7 +29,10 @@ async fn test_initialization(contract_wasm: &[u8]) -> Result<(), Box<dyn std::er
         .transact()
         .await?;
 
-    let contract_deadline = contract.view("get_deadline_timestamp").args_json(json!({})).await?;
+    let contract_deadline = contract
+        .view("get_deadline_timestamp")
+        .args_json(json!({}))
+        .await?;
     assert_eq!(contract_deadline.json::<u64>()?, deadline_timestamp_ms);
 
     let contract_proposal = contract.view("get_proposal").args_json(json!({})).await?;
@@ -40,7 +44,11 @@ async fn test_initialization(contract_wasm: &[u8]) -> Result<(), Box<dyn std::er
         .args_json(json!({"is_vote": true}))
         .transact()
         .await?;
-    assert!(outcome.is_failure(), "{:#?}", outcome.into_result().unwrap_err());
+    assert!(
+        outcome.is_failure(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
 
     Ok(())
 }
