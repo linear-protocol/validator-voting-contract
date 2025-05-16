@@ -1,13 +1,14 @@
 use near_sdk::json_types::U128;
 use near_sdk::store::LookupMap;
 use near_sdk::{
-    env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault,
-    Promise, PublicKey,
+    env, ext_contract, log, near, require, AccountId, BorshStorageKey, Gas, NearToken,
+    PanicOnDefault, Promise, PromiseError, PublicKey,
 };
 
 type Balance = u128;
 
 const VOTE_GAS: Gas = Gas::from_tgas(100);
+const STAKE_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 
 #[ext_contract(ext_voting)]
 trait VotingContract {
@@ -43,7 +44,7 @@ impl MockStakingPool {
     }
 
     #[payable]
-    pub fn stake(&mut self) -> Promise {
+    pub fn deposit_and_stake(&mut self) -> Promise {
         let amount = env::attached_deposit().as_yoctonear();
         require!(amount > 0u128, "Invalid stake amount");
 
@@ -81,8 +82,21 @@ impl MockStakingPool {
     pub fn get_staked_balance(&self) -> (U128, U128) {
         (
             U128::from(env::validator_stake(&env::current_account_id()).as_yoctonear()),
-            U128::from(self.total_staked_balance)
+            U128::from(self.total_staked_balance),
         )
+    }
+
+    #[private]
+    pub fn on_stake_action(&self, #[callback_result] result: Result<String, PromiseError>) {
+        if result.is_err() {
+            log!("Stake action failed");
+            return;
+        }
+
+        log!(
+            "Validator stake amount: {}",
+            env::validator_stake(&env::current_account_id())
+        );
     }
 
     fn internal_account_staked_balance(&self, account_id: &AccountId) -> Balance {
@@ -90,10 +104,16 @@ impl MockStakingPool {
     }
 
     fn internal_restake(&self) -> Promise {
-        Promise::new(env::current_account_id()).stake(
-            NearToken::from_yoctonear(self.total_staked_balance),
-            self.stake_public_key.clone(),
-        )
+        Promise::new(env::current_account_id())
+            .stake(
+                NearToken::from_yoctonear(self.total_staked_balance),
+                self.stake_public_key.clone(),
+            )
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(STAKE_CALLBACK_GAS)
+                    .on_stake_action(),
+            )
     }
 
     fn assert_owner(&self) {

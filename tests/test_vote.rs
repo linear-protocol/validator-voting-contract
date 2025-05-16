@@ -31,7 +31,7 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
 
     let alice = create_account(&sandbox, "alice", 10000).await?;
     let outcome = alice
-        .call(staking_pool_contract.id(), "stake")
+        .call(staking_pool_contract.id(), "deposit_and_stake")
         .args_json(json!({}))
         .deposit(NearToken::from_near(1000))
         .transact()
