@@ -87,7 +87,7 @@ impl MockStakingPool {
     }
 
     #[private]
-    pub fn on_stake_action(&self, #[callback_result] result: Result<String, PromiseError>) {
+    pub fn on_stake_action(&self, #[callback_result] result: Result<(), PromiseError>) {
         if result.is_err() {
             log!("Stake action failed");
             return;
