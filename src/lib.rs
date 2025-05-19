@@ -1,9 +1,11 @@
-use near_sdk::json_types::{U128, U64};
-use near_sdk::{env, near, require, AccountId, EpochHeight};
-use std::collections::HashMap;
-
 mod events;
-use crate::events::Event;
+mod utils;
+
+use events::Event;
+use near_sdk::json_types::{U128, U64};
+use near_sdk::{env, near, require, AccountId, EpochHeight, PanicOnDefault};
+use std::collections::HashMap;
+use utils::{validator_stake, validator_total_stake};
 
 /// Balance in yocto NEAR
 type Balance = u128;
@@ -13,7 +15,7 @@ type Timestamp = u64;
 /// Voting contract for any specific proposal. Once the majority of the stake holders agree to
 /// the proposal, the time will be recorded and the voting ends.
 #[near(contract_state)]
-#[derive(Default)]
+#[derive(PanicOnDefault)]
 pub struct Contract {
     proposal: String,
     deadline_timestamp_ms: Timestamp,
@@ -50,7 +52,7 @@ impl Contract {
         self.ping();
         let account_id = env::predecessor_account_id();
         let account_stake = if is_vote {
-            let stake = env::validator_stake(&account_id).as_yoctonear();
+            let stake = validator_stake(&account_id);
             require!(stake > 0, format!("{} is not a validator", account_id));
             stake
         } else {
@@ -95,7 +97,7 @@ impl Contract {
             let votes = std::mem::take(&mut self.votes);
             self.total_voted_stake = 0;
             for (account_id, _) in votes {
-                let account_current_stake = env::validator_stake(&account_id).as_yoctonear();
+                let account_current_stake = validator_stake(&account_id);
                 self.total_voted_stake += account_current_stake;
                 if account_current_stake > 0 {
                     self.votes.insert(account_id, account_current_stake);
@@ -112,7 +114,7 @@ impl Contract {
             self.result.is_none(),
             "check result is called after result is already set"
         );
-        let total_stake = env::validator_total_stake().as_yoctonear();
+        let total_stake = validator_total_stake();
         if self.total_voted_stake > total_stake * 2 / 3 {
             self.result = Some(env::block_timestamp_ms());
             Event::ProposalApproved {
@@ -133,7 +135,7 @@ impl Contract {
     pub fn get_total_voted_stake(&self) -> (U128, U128) {
         (
             self.total_voted_stake.into(),
-            env::validator_total_stake().as_yoctonear().into(),
+            validator_total_stake().into(),
         )
     }
 
@@ -160,6 +162,19 @@ impl Contract {
     /// Returns the proposal.
     pub fn get_proposal(&self) -> String {
         self.proposal.clone()
+    }
+}
+
+#[near]
+impl Contract {
+    #[cfg(feature = "integration-test")]
+    pub fn set_validator_stake(&mut self, validator_account_id: AccountId, amount: U128) {
+        utils::set_validator_stake(validator_account_id, amount.0)
+    }
+
+    #[cfg(feature = "integration-test")]
+    pub fn get_validator_stake(&self, validator_account_id: AccountId) -> U128 {
+        utils::get_validator_stake(&validator_account_id).into()
     }
 }
 
@@ -409,7 +424,7 @@ mod tests {
         let mut context = get_context(&validator(0));
 
         // vote after deadline
-        set_context(&context.block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000));
+        set_context(context.block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000));
         contract.vote(true);
     }
 
@@ -425,7 +440,7 @@ mod tests {
 
         // ping at epoch 2 after deadline
         set_context(
-            &context
+            context
                 .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
                 .epoch_height(2),
         );

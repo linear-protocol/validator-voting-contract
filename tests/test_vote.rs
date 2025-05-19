@@ -33,6 +33,7 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = alice
         .call(staking_pool_contract.id(), "deposit_and_stake")
         .args_json(json!({}))
+        .gas(Gas::from_tgas(250))
         .deposit(NearToken::from_near(1000))
         .transact()
         .await?;
@@ -42,14 +43,16 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
         outcome.into_result().unwrap_err()
     );
 
-    let staked_balance = staking_pool_contract
-        .view("get_staked_balance")
-        .args_json(json!({}))
+    let staked_balance = voting_contract
+        .view("get_validator_stake")
+        .args_json(json!({
+            "validator_account_id": staking_pool_contract.id()
+        }))
         .await?;
     println!(
         "user account: {}, {:#?}",
         alice.id(),
-        staked_balance.json::<(String, String)>()?
+        staked_balance.json::<String>()?
     );
 
     let outcome = owner

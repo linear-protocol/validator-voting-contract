@@ -9,10 +9,13 @@ type Balance = u128;
 
 const VOTE_GAS: Gas = Gas::from_tgas(100);
 const STAKE_CALLBACK_GAS: Gas = Gas::from_tgas(5);
+const SET_VALIDATOR_STAKE_GAS: Gas = Gas::from_tgas(200);
 
 #[ext_contract(ext_voting)]
 trait VotingContract {
     fn vote(&mut self, is_vote: bool);
+
+    fn set_validator_stake(validator_account_id: AccountId, amount: U128);
 }
 
 #[near]
@@ -28,18 +31,20 @@ struct MockStakingPool {
     stake_public_key: PublicKey,
     accounts: LookupMap<AccountId, Balance>,
     total_staked_balance: Balance,
+    voting_account_id: AccountId,
 }
 
 #[near]
 impl MockStakingPool {
     #[init]
     #[private]
-    pub fn new(owner_id: AccountId, stake_public_key: PublicKey) -> Self {
+    pub fn new(owner_id: AccountId, stake_public_key: PublicKey, voting_account_id: AccountId) -> Self {
         Self {
             owner_id,
             stake_public_key,
             accounts: LookupMap::new(Prefix::Accounts),
             total_staked_balance: 0,
+            voting_account_id,
         }
     }
 
@@ -73,47 +78,45 @@ impl MockStakingPool {
     /// Owner's method.
     /// Calls `vote(is_vote)` on the given voting contract account ID on behalf of the pool.
     pub fn vote(&mut self, voting_account_id: AccountId, is_vote: bool) -> Promise {
+        require!(self.voting_account_id == voting_account_id, "Voting account id mismatching");
         self.assert_owner();
         ext_voting::ext(voting_account_id)
             .with_static_gas(VOTE_GAS)
             .vote(is_vote)
     }
 
-    pub fn get_staked_balance(&self) -> (U128, U128) {
-        (
-            U128::from(env::validator_stake(&env::current_account_id()).as_yoctonear()),
-            U128::from(self.total_staked_balance),
-        )
-    }
-
-    #[private]
-    pub fn on_stake_action(&self, #[callback_result] result: Result<(), PromiseError>) {
-        if result.is_err() {
-            log!("Stake action failed");
-            return;
-        }
-
-        log!(
-            "Validator stake amount: {}",
-            env::validator_stake(&env::current_account_id())
-        );
-    }
+    // #[private]
+    // pub fn on_stake_action(&self, #[callback_result] result: Result<(), PromiseError>) {
+    //     if result.is_err() {
+    //         log!("Stake action failed");
+    //         return;
+    //     }
+    //
+    //     log!(
+    //         "Validator stake amount: {}",
+    //         env::validator_stake(&env::current_account_id())
+    //     );
+    // }
 
     fn internal_account_staked_balance(&self, account_id: &AccountId) -> Balance {
         *self.accounts.get(account_id).unwrap_or(&0u128)
     }
 
     fn internal_restake(&self) -> Promise {
-        Promise::new(env::current_account_id())
-            .stake(
-                NearToken::from_yoctonear(self.total_staked_balance),
-                self.stake_public_key.clone(),
-            )
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(STAKE_CALLBACK_GAS)
-                    .on_stake_action(),
-            )
+        // Promise::new(env::current_account_id())
+        //     .stake(
+        //         NearToken::from_yoctonear(self.total_staked_balance),
+        //         self.stake_public_key.clone(),
+        //     )
+        //     .then(
+        //         Self::ext(env::current_account_id())
+        //             .with_static_gas(STAKE_CALLBACK_GAS)
+        //             .on_stake_action(),
+        //     )
+
+        ext_voting::ext(self.voting_account_id.clone())
+            .with_static_gas(SET_VALIDATOR_STAKE_GAS)
+            .set_validator_stake(env::current_account_id(), self.total_staked_balance.into())
     }
 
     fn assert_owner(&self) {

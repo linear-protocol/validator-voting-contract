@@ -16,14 +16,15 @@ pub struct VotingInitArgs {
 pub struct MockStakingPoolInitArgs {
     pub owner_id: AccountId,
     pub stake_public_key: PublicKey,
+    pub voting_account_id: AccountId,
 }
 
 pub async fn deploy_voting_contract(
     sandbox: &Worker<Sandbox>,
 ) -> Result<(Contract, VotingInitArgs), Box<dyn std::error::Error>> {
-    let contract_wasm = near_workspaces::compile_project("./").await?;
+    let contract_wasm = include_bytes!("../res/validator_voting.wasm");
     let contract_account = create_account(sandbox, "voting", 100).await?;
-    let contract = contract_account.deploy(&contract_wasm).await?.result;
+    let contract = contract_account.deploy(contract_wasm).await?.result;
 
     // Initialize contract
     let init_args = VotingInitArgs {
@@ -46,6 +47,7 @@ pub async fn deploy_voting_contract(
 
 pub async fn deploy_mock_staking_pool_contract(
     sandbox: &Worker<Sandbox>,
+    voting_account_id: AccountId,
 ) -> Result<(Contract, Account, MockStakingPoolInitArgs), Box<dyn std::error::Error>> {
     let contract_wasm =
         near_workspaces::compile_project("./tests/contracts/mock-staking-pool").await?;
@@ -59,6 +61,7 @@ pub async fn deploy_mock_staking_pool_contract(
             "ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp",
         )
         .unwrap(),
+        voting_account_id,
     };
     let _ = contract
         .call("new")
@@ -72,8 +75,9 @@ pub async fn deploy_mock_staking_pool_contract(
 pub async fn setup_env(
 ) -> Result<(Contract, Contract, Worker<Sandbox>, Account), Box<dyn std::error::Error>> {
     let sandbox = near_workspaces::sandbox().await?;
-    let (staking_pool_contract, owner, _) = deploy_mock_staking_pool_contract(&sandbox).await?;
     let (voting_contract, _) = deploy_voting_contract(&sandbox).await?;
+    let (staking_pool_contract, owner, _) =
+        deploy_mock_staking_pool_contract(&sandbox, voting_contract.id().clone()).await?;
 
     Ok((staking_pool_contract, voting_contract, sandbox, owner))
 }
