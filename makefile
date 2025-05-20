@@ -9,17 +9,17 @@ lint:
 validator-voting:
 	$(call compile-release,validator-voting)
 	@mkdir -p res
-	@cp target/wasm32-unknown-unknown/release/validator_voting.wasm ./res/validator_voting.wasm
+	@cp target/near/validator_voting.wasm ./res/validator_voting.wasm
 
 validator-voting-integration-test:
 	$(call compile-release,validator-voting,integration-test)
 	@mkdir -p tests/res
-	@cp target/wasm32-unknown-unknown/release/validator_voting.wasm ./tests/res/validator_voting.wasm
+	@cp target/near/validator_voting.wasm ./tests/res/validator_voting.wasm
 
 test:
 	@cargo test
 
 define compile-release
 	@rustup target add wasm32-unknown-unknown
-	RUSTFLAGS=$(RUSTFLAGS) cargo build --package $(1) --target wasm32-unknown-unknown --release $(if $(2),--features $(2))
+	@cargo near build non-reproducible-wasm $(if $(2),--features $(2))
 endef
