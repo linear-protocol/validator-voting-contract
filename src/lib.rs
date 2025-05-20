@@ -176,6 +176,11 @@ impl Contract {
     pub fn get_validator_stake(&self, validator_account_id: AccountId) -> U128 {
         utils::get_validator_stake(&validator_account_id).into()
     }
+
+    #[cfg(feature = "integration-test")]
+    pub fn get_validator_total_stake(&self) -> U128 {
+        self.get_validator_total_stake().into()
+    }
 }
 
 #[cfg(test)]

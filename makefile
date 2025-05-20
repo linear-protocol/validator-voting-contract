@@ -17,7 +17,7 @@ validator-voting-integration-test:
 	@cp target/near/validator_voting.wasm ./tests/res/validator_voting.wasm
 
 test:
-	@cargo test
+	@cargo test -- --nocapture
 
 define compile-release
 	@rustup target add wasm32-unknown-unknown

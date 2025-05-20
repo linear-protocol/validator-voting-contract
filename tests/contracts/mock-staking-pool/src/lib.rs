@@ -8,7 +8,6 @@ use near_sdk::{
 type Balance = u128;
 
 const VOTE_GAS: Gas = Gas::from_tgas(100);
-const STAKE_CALLBACK_GAS: Gas = Gas::from_tgas(5);
 const SET_VALIDATOR_STAKE_GAS: Gas = Gas::from_tgas(200);
 
 #[ext_contract(ext_voting)]
@@ -115,7 +114,6 @@ impl MockStakingPool {
         //     )
 
         ext_voting::ext(self.voting_account_id.clone())
-            .with_static_gas(SET_VALIDATOR_STAKE_GAS)
             .set_validator_stake(env::current_account_id(), self.total_staked_balance.into())
     }
 
