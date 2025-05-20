@@ -1,4 +1,4 @@
-use near_sdk::{require, Gas, NearToken};
+use near_sdk::{Gas, NearToken};
 use serde_json::json;
 
 mod utils;

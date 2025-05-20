@@ -2,12 +2,10 @@ use crate::Balance;
 
 #[cfg(feature = "integration-test")]
 fn get_validators() -> near_sdk::store::LookupMap<near_sdk::AccountId, Balance> {
-    near_sdk::env::storage_read("__validators_map__".as_bytes())
-        .map_or_else(|| {
-            near_sdk::store::LookupMap::new("__validators__".as_bytes())
-        }, |validators| {
-            near_sdk::borsh::from_slice(&validators).unwrap()
-        })
+    near_sdk::env::storage_read("__validators_map__".as_bytes()).map_or_else(
+        || near_sdk::store::LookupMap::new("__validators__".as_bytes()),
+        |validators| near_sdk::borsh::from_slice(&validators).unwrap(),
+    )
 }
 
 #[cfg(feature = "integration-test")]
@@ -18,15 +16,18 @@ fn set_validators(validators: near_sdk::store::LookupMap<near_sdk::AccountId, Ba
     );
 }
 
+#[cfg(feature = "integration-test")]
 fn get_validator_total_stake() -> Balance {
     near_sdk::env::storage_read("__validator_total_stake__".as_bytes())
-        .map_or(0, |amount| {
-            near_sdk::borsh::from_slice(&amount).unwrap()
-        })
+        .map_or(0, |amount| near_sdk::borsh::from_slice(&amount).unwrap())
 }
 
+#[cfg(feature = "integration-test")]
 fn set_validator_total_stake(amount: Balance) {
-    near_sdk::env::storage_write("__validator_total_stake__".as_bytes(), &near_sdk::borsh::to_vec(&amount).unwrap());
+    near_sdk::env::storage_write(
+        "__validator_total_stake__".as_bytes(),
+        &near_sdk::borsh::to_vec(&amount).unwrap(),
+    );
 }
 
 #[cfg(feature = "integration-test")]
