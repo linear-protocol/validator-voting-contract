@@ -1,4 +1,4 @@
-use near_sdk::{Gas, NearToken};
+use near_sdk::{require, Gas, NearToken};
 use serde_json::json;
 
 mod utils;
@@ -71,7 +71,7 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
-    let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(3).await?;
+    let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(300).await?;
 
     let alice = create_account(&sandbox, "alice", 50000).await?;
 
@@ -97,7 +97,27 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    for staking_pool_contract in staking_pool_contracts.iter() {
+    for (index, staking_pool_contract) in staking_pool_contracts.iter().enumerate() {
+        let outcome = owner
+            .call(voting_contract.id(), "ping")
+            .gas(Gas::from_tgas(300))
+            .transact()
+            .await?;
+
+        if index <= 200 {
+            assert!(
+                outcome.is_success(),
+                "{:#?}",
+                outcome.into_result().unwrap_err()
+            );
+        } else {
+            assert!(
+                outcome.is_failure(),
+                "Ping should failed since vote is finished",
+            );
+            break;
+        }
+
         let outcome = owner
             .call(staking_pool_contract.id(), "vote")
             .args_json(json!({
@@ -107,11 +127,13 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
             .gas(Gas::from_tgas(200))
             .transact()
             .await?;
+
         assert!(
             outcome.is_success(),
             "{:#?}",
             outcome.into_result().unwrap_err()
         );
+        println!("validator #{index} voted");
     }
 
     Ok(())

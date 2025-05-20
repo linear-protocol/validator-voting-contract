@@ -33,7 +33,7 @@ pub async fn deploy_voting_contract(
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis()
-            + 10 * 60 * 1000) as u64,
+            + 60 * 60 * 1000) as u64,
     };
 
     let _ = contract
