@@ -179,7 +179,7 @@ impl Contract {
 
     #[cfg(feature = "integration-test")]
     pub fn get_validator_total_stake(&self) -> U128 {
-        self.get_validator_total_stake().into()
+        utils::validator_total_stake().into()
     }
 }
 

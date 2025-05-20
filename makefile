@@ -16,7 +16,7 @@ validator-voting-integration-test:
 	@mkdir -p tests/res
 	@cp target/near/validator_voting.wasm ./tests/res/validator_voting.wasm
 
-test:
+test: validator-voting-integration-test
 	@cargo test -- --nocapture
 
 define compile-release

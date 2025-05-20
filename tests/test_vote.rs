@@ -4,7 +4,7 @@ use serde_json::json;
 mod utils;
 use utils::*;
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Error>> {
     let sandbox = near_workspaces::sandbox().await?;
     let (contract, _) = deploy_voting_contract(&sandbox).await?;
@@ -23,7 +23,7 @@ async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
     let (staking_pool_contract, voting_contract, sandbox, owner) = setup_env().await?;
 
@@ -74,11 +74,13 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::test]
 async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
     let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(3).await?;
+
     let alice = create_account(&sandbox, "alice", 50000).await?;
 
     for staking_pool_contract in staking_pool_contracts.iter() {
         let outcome = alice
             .call(staking_pool_contract.id(), "deposit_and_stake")
+            .args_json(json!({}))
             .gas(Gas::from_tgas(250))
             .deposit(NearToken::from_near(100))
             .transact()
@@ -89,18 +91,18 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
             outcome.into_result().unwrap_err()
         );
 
-        let staked_balance = voting_contract
+        let total_staked = voting_contract
             .view("get_validator_total_stake")
             .await?;
         println!(
-            "user account: {}, {:#?}",
+            "total staked: {}, {:#?}",
             alice.id(),
-            staked_balance.json::<String>()?
+            total_staked.json::<String>()?
         );
     }
 
     for staking_pool_contract in staking_pool_contracts.iter() {
-        let outcome = alice.call(staking_pool_contract.id(), "vote")
+        let outcome = owner.call(staking_pool_contract.id(), "vote")
             .args_json(json!({
             "voting_account_id": voting_contract.id(),
             "is_vote": true

@@ -3,7 +3,7 @@ use serde_json::json;
 mod utils;
 use utils::*;
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_initialization() -> Result<(), Box<dyn std::error::Error>> {
     let sandbox = near_workspaces::sandbox().await?;
     let (contract, init_args) = deploy_voting_contract(&sandbox).await?;
