@@ -86,7 +86,7 @@ pub async fn deploy_mock_staking_pool_contracts(
         stake_public_key: PublicKey::from_str(
             "ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp",
         )
-            .unwrap(),
+        .unwrap(),
         voting_account_id,
     };
 
@@ -99,7 +99,11 @@ pub async fn deploy_mock_staking_pool_contracts(
             .args_json(json!(init_args))
             .transact()
             .await?;
-        assert!(outcome.is_success(), "{:#?}", outcome.into_result().unwrap_err());
+        assert!(
+            outcome.is_success(),
+            "{:#?}",
+            outcome.into_result().unwrap_err()
+        );
         contracts.push(contract);
     }
 
@@ -121,8 +125,12 @@ pub async fn setup_env_many(
 ) -> Result<(Vec<Contract>, Contract, Worker<Sandbox>, Account), Box<dyn std::error::Error>> {
     let sandbox = near_workspaces::sandbox().await?;
     let (voting_contract, _) = deploy_voting_contract(&sandbox).await?;
-    let (staking_pool_contracts, owner, _) =
-        deploy_mock_staking_pool_contracts(&sandbox, voting_contract.id().clone(), staking_pool_num).await?;
+    let (staking_pool_contracts, owner, _) = deploy_mock_staking_pool_contracts(
+        &sandbox,
+        voting_contract.id().clone(),
+        staking_pool_num,
+    )
+    .await?;
 
     Ok((staking_pool_contracts, voting_contract, sandbox, owner))
 }

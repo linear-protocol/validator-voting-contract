@@ -16,9 +16,7 @@ async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Erro
         .args_json(json!({"is_vote": true}))
         .transact()
         .await?;
-    assert!(
-        outcome.is_failure(),
-    );
+    assert!(outcome.is_failure(),);
 
     Ok(())
 }
@@ -91,9 +89,7 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
             outcome.into_result().unwrap_err()
         );
 
-        let total_staked = voting_contract
-            .view("get_validator_total_stake")
-            .await?;
+        let total_staked = voting_contract.view("get_validator_total_stake").await?;
         println!(
             "total staked: {}, {:#?}",
             alice.id(),
@@ -102,11 +98,12 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     for staking_pool_contract in staking_pool_contracts.iter() {
-        let outcome = owner.call(staking_pool_contract.id(), "vote")
+        let outcome = owner
+            .call(staking_pool_contract.id(), "vote")
             .args_json(json!({
-            "voting_account_id": voting_contract.id(),
-            "is_vote": true
-        }))
+                "voting_account_id": voting_contract.id(),
+                "is_vote": true
+            }))
             .gas(Gas::from_tgas(200))
             .transact()
             .await?;
