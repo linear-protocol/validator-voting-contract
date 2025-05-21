@@ -22,9 +22,9 @@ pub struct MockStakingPoolInitArgs {
 pub async fn deploy_voting_contract(
     sandbox: &Worker<Sandbox>,
 ) -> Result<(Contract, VotingInitArgs), Box<dyn std::error::Error>> {
-    let contract_wasm = include_bytes!("../res/validator_voting.wasm");
+    let contract_wasm = std::fs::read("tests/res/validator_voting.wasm")?;
     let contract_account = create_account(sandbox, "voting", 100).await?;
-    let contract = contract_account.deploy(contract_wasm).await?.result;
+    let contract = contract_account.deploy(&contract_wasm).await?.result;
 
     // Initialize contract
     let init_args = VotingInitArgs {
