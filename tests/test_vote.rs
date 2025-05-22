@@ -1,3 +1,4 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use near_sdk::{Gas, NearToken};
 use serde_json::json;
 
@@ -7,7 +8,14 @@ use utils::*;
 #[tokio::test]
 async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Error>> {
     let sandbox = near_workspaces::sandbox().await?;
-    let (contract, _) = deploy_voting_contract(&sandbox).await?;
+    let (contract, _) = deploy_voting_contract(
+        &sandbox,
+        (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            + 10 * 60 * 1000) as u64
+    ).await?;
 
     let sandbox = near_workspaces::sandbox().await?;
     let user_account = sandbox.dev_create_account().await?;
@@ -98,6 +106,9 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     for (index, staking_pool_contract) in staking_pool_contracts.iter().enumerate() {
+        sandbox.fast_forward(500).await?;
+        let block = sandbox.view_block().await?;
+
         let outcome = owner
             .call(voting_contract.id(), "ping")
             .gas(Gas::from_tgas(300))
@@ -133,7 +144,7 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
             "{:#?}",
             outcome.into_result().unwrap_err()
         );
-        println!("validator #{index} voted");
+        println!("validator #{} voted at epoch ({})", index, block.epoch_id());
     }
 
     Ok(())

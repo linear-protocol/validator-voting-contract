@@ -21,6 +21,7 @@ pub struct MockStakingPoolInitArgs {
 
 pub async fn deploy_voting_contract(
     sandbox: &Worker<Sandbox>,
+    deadline_timestamp_ms: u64,
 ) -> Result<(Contract, VotingInitArgs), Box<dyn std::error::Error>> {
     let contract_wasm = std::fs::read("tests/res/validator_voting.wasm")?;
     let contract_account = create_account(sandbox, "voting", 100).await?;
@@ -29,11 +30,7 @@ pub async fn deploy_voting_contract(
     // Initialize contract
     let init_args = VotingInitArgs {
         proposal: "test_proposal".to_string(),
-        deadline_timestamp_ms: (SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-            + 60 * 60 * 1000) as u64,
+        deadline_timestamp_ms,
     };
 
     let _ = contract
@@ -113,7 +110,14 @@ pub async fn deploy_mock_staking_pool_contracts(
 pub async fn setup_env(
 ) -> Result<(Contract, Contract, Worker<Sandbox>, Account), Box<dyn std::error::Error>> {
     let sandbox = near_workspaces::sandbox().await?;
-    let (voting_contract, _) = deploy_voting_contract(&sandbox).await?;
+    let (voting_contract, _) = deploy_voting_contract(
+        &sandbox,
+        (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            + 10 * 60 * 1000) as u64
+    ).await?;
     let (staking_pool_contract, owner, _) =
         deploy_mock_staking_pool_contract(&sandbox, voting_contract.id().clone()).await?;
 
@@ -124,7 +128,14 @@ pub async fn setup_env_many(
     staking_pool_num: usize,
 ) -> Result<(Vec<Contract>, Contract, Worker<Sandbox>, Account), Box<dyn std::error::Error>> {
     let sandbox = near_workspaces::sandbox().await?;
-    let (voting_contract, _) = deploy_voting_contract(&sandbox).await?;
+    let (voting_contract, _) = deploy_voting_contract(
+        &sandbox,
+        (SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            + 24 * 60 * 60 * 1000) as u64
+    ).await?;
     let (staking_pool_contracts, owner, _) = deploy_mock_staking_pool_contracts(
         &sandbox,
         voting_contract.id().clone(),
