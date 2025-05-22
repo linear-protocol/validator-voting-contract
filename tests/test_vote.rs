@@ -78,7 +78,7 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[tokio::test]
+// #[tokio::test] // it takes around 50 minutes
 async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
     let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(300).await?;
 
