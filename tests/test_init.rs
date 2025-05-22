@@ -1,5 +1,5 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 mod utils;
 use utils::*;
@@ -13,8 +13,9 @@ async fn test_initialization() -> Result<(), Box<dyn std::error::Error>> {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis()
-            + 10 * 60 * 1000) as u64
-    ).await?;
+            + 10 * 60 * 1000) as u64,
+    )
+    .await?;
 
     let contract_deadline = contract
         .view("get_deadline_timestamp")

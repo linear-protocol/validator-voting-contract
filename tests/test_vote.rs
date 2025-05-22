@@ -1,6 +1,6 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use near_sdk::{Gas, NearToken};
 use serde_json::json;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 mod utils;
 use utils::*;
@@ -14,8 +14,9 @@ async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Erro
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis()
-            + 10 * 60 * 1000) as u64
-    ).await?;
+            + 10 * 60 * 1000) as u64,
+    )
+    .await?;
 
     let sandbox = near_workspaces::sandbox().await?;
     let user_account = sandbox.dev_create_account().await?;

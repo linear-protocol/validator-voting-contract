@@ -116,8 +116,9 @@ pub async fn setup_env(
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis()
-            + 10 * 60 * 1000) as u64
-    ).await?;
+            + 10 * 60 * 1000) as u64,
+    )
+    .await?;
     let (staking_pool_contract, owner, _) =
         deploy_mock_staking_pool_contract(&sandbox, voting_contract.id().clone()).await?;
 
@@ -134,8 +135,9 @@ pub async fn setup_env_many(
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis()
-            + 24 * 60 * 60 * 1000) as u64
-    ).await?;
+            + 24 * 60 * 60 * 1000) as u64,
+    )
+    .await?;
     let (staking_pool_contracts, owner, _) = deploy_mock_staking_pool_contracts(
         &sandbox,
         voting_contract.id().clone(),
