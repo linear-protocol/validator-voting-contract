@@ -1,5 +1,6 @@
-use near_sdk::{Gas, NearToken};
+use near_sdk::{AccountId, Gas, NearToken};
 use serde_json::json;
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod utils;
@@ -78,7 +79,7 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// #[tokio::test] // it takes around 50 minutes
+#[tokio::test] // it takes around 50 minutes
 async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
     let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(300).await?;
 
@@ -146,6 +147,13 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
             outcome.into_result().unwrap_err()
         );
         println!("validator #{} voted at epoch ({})", index, block.epoch_id());
+        println!(
+            "Votes: {:#?}",
+            voting_contract
+                .view("get_votes")
+                .await?
+                .json::<HashMap<AccountId, String>>()?
+        );
     }
 
     Ok(())

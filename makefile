@@ -1,6 +1,6 @@
 RUSTFLAGS = "-C link-arg=-s"
 
-all: validator-voting validator-voting-integration-test
+all: lint validator-voting validator-voting-integration-test
 
 lint:
 	@cargo fmt --all
