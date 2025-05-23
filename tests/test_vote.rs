@@ -33,7 +33,7 @@ async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Erro
 
 #[tokio::test]
 async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
-    let (staking_pool_contract, voting_contract, sandbox, owner) = setup_env().await?;
+    let (staking_pool_contract, voting_contract, sandbox, owner) = setup_env(None).await?;
 
     let alice = create_account(&sandbox, "alice", 10000).await?;
     let outcome = alice
@@ -155,6 +155,59 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
                 .json::<HashMap<AccountId, String>>()?
         );
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
+    let (staking_pool_contract, voting_contract, sandbox, owner) = setup_env(
+        Some((SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            + 1 * 60 * 1000) as u64)
+    ).await?;
+
+    let alice = create_account(&sandbox, "alice", 10000).await?;
+    let outcome = alice
+        .call(staking_pool_contract.id(), "deposit_and_stake")
+        .args_json(json!({}))
+        .gas(Gas::from_tgas(250))
+        .deposit(NearToken::from_near(1000))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let staked_balance = voting_contract
+        .view("get_validator_stake")
+        .args_json(json!({
+            "validator_account_id": staking_pool_contract.id()
+        }))
+        .await?;
+    println!(
+        "user account: {}, {:#?}",
+        alice.id(),
+        staked_balance.json::<String>()?
+    );
+
+    sandbox.fast_forward(500).await?; // let vote expire
+
+    let outcome = owner
+        .call(staking_pool_contract.id(), "vote")
+        .args_json(json!({
+            "voting_account_id": voting_contract.id(),
+            "is_vote": true
+        }))
+        .gas(Gas::from_tgas(200))
+        .transact()
+        .await?;
+
+    assert!(outcome.into_result().unwrap_err().to_string().contains("Smart contract panicked: Voting deadline has already passed"));
 
     Ok(())
 }

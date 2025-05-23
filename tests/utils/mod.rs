@@ -108,15 +108,16 @@ pub async fn deploy_mock_staking_pool_contracts(
 }
 
 pub async fn setup_env(
+    deadline_timestamp_ms: Option<u64>,
 ) -> Result<(Contract, Contract, Worker<Sandbox>, Account), Box<dyn std::error::Error>> {
     let sandbox = near_workspaces::sandbox().await?;
     let (voting_contract, _) = deploy_voting_contract(
         &sandbox,
-        (SystemTime::now()
+        deadline_timestamp_ms.unwrap_or_else(|| (SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis()
-            + 10 * 60 * 1000) as u64,
+            + 10 * 60 * 1000) as u64),
     )
     .await?;
     let (staking_pool_contract, owner, _) =
