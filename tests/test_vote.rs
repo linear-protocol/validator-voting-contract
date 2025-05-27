@@ -211,3 +211,68 @@ async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
+    let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(
+        2
+    ).await?;
+
+    let alice = create_account(&sandbox, "alice", 10000).await?;
+
+    let outcome = alice
+        .call(staking_pool_contracts[0].id(), "deposit_and_stake")
+        .gas(Gas::from_tgas(250))
+        .deposit(NearToken::from_near(1000))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let outcome = alice
+        .call(staking_pool_contracts[1].id(), "deposit_and_stake")
+        .gas(Gas::from_tgas(250))
+        .deposit(NearToken::from_near(1000))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let outcome = owner
+        .call(staking_pool_contracts[0].id(), "vote")
+        .args_json(json!({
+            "voting_account_id": voting_contract.id(),
+            "is_vote": true
+        }))
+        .gas(Gas::from_tgas(200))
+        .transact()
+        .await?;
+
+    assert!(outcome.is_success(), "{:#?}", outcome.into_result().unwrap_err());
+
+    let votes = owner.view(voting_contract.id(), "get_votes").await?;
+    assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 1);
+
+    let outcome = owner
+        .call(staking_pool_contracts[0].id(), "vote")
+        .args_json(json!({
+            "voting_account_id": voting_contract.id(),
+            "is_vote": false
+        }))
+        .gas(Gas::from_tgas(200))
+        .transact()
+        .await?;
+
+    assert!(outcome.is_success(), "{:#?}", outcome.into_result().unwrap_err());
+
+    let votes = owner.view(voting_contract.id(), "get_votes").await?;
+    assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 0);
+
+    Ok(())
+}
