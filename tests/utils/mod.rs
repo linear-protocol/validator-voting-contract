@@ -113,11 +113,13 @@ pub async fn setup_env(
     let sandbox = near_workspaces::sandbox().await?;
     let (voting_contract, _) = deploy_voting_contract(
         &sandbox,
-        deadline_timestamp_ms.unwrap_or_else(|| (SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-            + 10 * 60 * 1000) as u64),
+        deadline_timestamp_ms.unwrap_or_else(|| {
+            (SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+                + 10 * 60 * 1000) as u64
+        }),
     )
     .await?;
     let (staking_pool_contract, owner, _) =

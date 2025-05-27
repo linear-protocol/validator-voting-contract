@@ -161,13 +161,14 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
-    let (staking_pool_contract, voting_contract, sandbox, owner) = setup_env(
-        Some((SystemTime::now()
+    let (staking_pool_contract, voting_contract, sandbox, owner) = setup_env(Some(
+        (SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis()
-            + 1 * 60 * 1000) as u64)
-    ).await?;
+            + 60 * 1000) as u64,
+    ))
+    .await?;
 
     let alice = create_account(&sandbox, "alice", 10000).await?;
     let outcome = alice
@@ -207,16 +208,18 @@ async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
         .transact()
         .await?;
 
-    assert!(outcome.into_result().unwrap_err().to_string().contains("Smart contract panicked: Voting deadline has already passed"));
+    assert!(outcome
+        .into_result()
+        .unwrap_err()
+        .to_string()
+        .contains("Smart contract panicked: Voting deadline has already passed"));
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
-    let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(
-        2
-    ).await?;
+    let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(2).await?;
 
     let alice = create_account(&sandbox, "alice", 10000).await?;
 
@@ -254,7 +257,11 @@ async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
         .transact()
         .await?;
 
-    assert!(outcome.is_success(), "{:#?}", outcome.into_result().unwrap_err());
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
     assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 1);
@@ -269,7 +276,11 @@ async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
         .transact()
         .await?;
 
-    assert!(outcome.is_success(), "{:#?}", outcome.into_result().unwrap_err());
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
     assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 0);
@@ -279,9 +290,7 @@ async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
-    let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(
-        2
-    ).await?;
+    let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(2).await?;
 
     let alice = create_account(&sandbox, "alice", 10000).await?;
 
@@ -319,7 +328,11 @@ async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
         .transact()
         .await?;
 
-    assert!(outcome.is_success(), "{:#?}", outcome.into_result().unwrap_err());
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
 
     let outcome = alice
         .call(staking_pool_contracts[0].id(), "unstake")
@@ -352,7 +365,11 @@ async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
         .transact()
         .await?;
 
-    assert!(outcome.is_success(), "{:#?}", outcome.into_result().unwrap_err());
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
     let votes = votes.json::<HashMap<AccountId, String>>()?;
