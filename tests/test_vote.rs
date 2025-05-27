@@ -276,3 +276,88 @@ async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
+    let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(
+        2
+    ).await?;
+
+    let alice = create_account(&sandbox, "alice", 10000).await?;
+
+    let outcome = alice
+        .call(staking_pool_contracts[0].id(), "deposit_and_stake")
+        .gas(Gas::from_tgas(250))
+        .deposit(NearToken::from_near(1000))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let outcome = alice
+        .call(staking_pool_contracts[1].id(), "deposit_and_stake")
+        .gas(Gas::from_tgas(250))
+        .deposit(NearToken::from_near(1000))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let outcome = owner
+        .call(staking_pool_contracts[0].id(), "vote")
+        .args_json(json!({
+            "voting_account_id": voting_contract.id(),
+            "is_vote": true
+        }))
+        .gas(Gas::from_tgas(200))
+        .transact()
+        .await?;
+
+    assert!(outcome.is_success(), "{:#?}", outcome.into_result().unwrap_err());
+
+    let outcome = alice
+        .call(staking_pool_contracts[0].id(), "unstake")
+        .args_json(json!({
+            "amount": NearToken::from_near(1000).as_yoctonear().to_string()
+        }))
+        .gas(Gas::from_tgas(250))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let votes = owner.view(voting_contract.id(), "get_votes").await?;
+    let votes = votes.json::<HashMap<AccountId, String>>()?;
+    assert_eq!(votes.len(), 1);
+    assert!(votes.contains_key(staking_pool_contracts[0].id()));
+
+    sandbox.fast_forward(500).await?;
+
+    let outcome = owner
+        .call(staking_pool_contracts[1].id(), "vote")
+        .args_json(json!({
+            "voting_account_id": voting_contract.id(),
+            "is_vote": true
+        }))
+        .gas(Gas::from_tgas(200))
+        .transact()
+        .await?;
+
+    assert!(outcome.is_success(), "{:#?}", outcome.into_result().unwrap_err());
+
+    let votes = owner.view(voting_contract.id(), "get_votes").await?;
+    let votes = votes.json::<HashMap<AccountId, String>>()?;
+    assert_eq!(votes.len(), 1);
+    assert!(votes.contains_key(staking_pool_contracts[1].id()));
+
+    Ok(())
+}
