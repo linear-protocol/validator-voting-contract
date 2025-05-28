@@ -31,7 +31,7 @@ pub enum Event<'a> {
     },
 }
 
-impl<'a> Event<'a> {
+impl Event<'_> {
     pub fn emit(&self) {
         let json = json!(self);
         let event_json = json!({
