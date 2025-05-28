@@ -1,8 +1,8 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use crate::utils::{create_account, deploy_voting_contract, setup_env};
 use near_sdk::{Gas, NearToken};
 use near_workspaces::AccountId;
 use serde_json::json;
-use crate::utils::{create_account, deploy_voting_contract, setup_env};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 mod utils;
 
@@ -22,7 +22,7 @@ async fn test_stake_unstake() -> Result<(), Box<dyn std::error::Error>> {
         outcome.into_result().unwrap_err()
     );
     let balance = alice.view_account().await?.balance.as_near();
-    assert!(balance >= 8999 && balance < 9000);
+    assert!((8999..9000).contains(&balance));
 
     let outcome = alice
         .call(staking_pool_contract.id(), "unstake")
@@ -38,7 +38,7 @@ async fn test_stake_unstake() -> Result<(), Box<dyn std::error::Error>> {
         outcome.into_result().unwrap_err()
     );
     let balance = alice.view_account().await?.balance.as_near();
-    assert!(balance >= 9999 && balance < 10000);
+    assert!((9999..10000).contains(&balance));
 
     Ok(())
 }
@@ -53,7 +53,8 @@ async fn test_get_set_voting_account_id() -> Result<(), Box<dyn std::error::Erro
             .unwrap()
             .as_millis()
             + 10 * 60 * 1000) as u64,
-    ).await?;
+    )
+    .await?;
 
     let alice = create_account(&sandbox, "alice", 10000).await?;
     let outcome = alice
@@ -80,15 +81,24 @@ async fn test_get_set_voting_account_id() -> Result<(), Box<dyn std::error::Erro
         "{:#?}",
         outcome.into_result().unwrap_err()
     );
-    let voting_account_id = staking_pool_contract.view("get_voting_account_id").await?.json::<AccountId>()?;
+    let voting_account_id = staking_pool_contract
+        .view("get_voting_account_id")
+        .await?
+        .json::<AccountId>()?;
     assert_eq!(&voting_account_id, new_voting_contract.id());
 
-    let validator_stake = new_voting_contract.view("get_validator_stake")
+    let validator_stake = new_voting_contract
+        .view("get_validator_stake")
         .args_json(json!({
             "validator_account_id": staking_pool_contract.id(),
-        })).await?.json::<String>()?;
+        }))
+        .await?
+        .json::<String>()?;
 
-    assert_eq!(validator_stake, NearToken::from_near(1000).as_yoctonear().to_string());
+    assert_eq!(
+        validator_stake,
+        NearToken::from_near(1000).as_yoctonear().to_string()
+    );
 
     Ok(())
 }
