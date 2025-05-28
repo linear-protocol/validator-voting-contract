@@ -1,6 +1,6 @@
 RUSTFLAGS = "-C link-arg=-s"
 
-all: lint validator-voting validator-voting-integration-test
+all: lint validator-voting validator-voting-test
 
 lint:
 	@cargo fmt --all
@@ -11,12 +11,12 @@ validator-voting:
 	@mkdir -p res
 	@cp target/near/validator_voting.wasm ./res/validator_voting.wasm
 
-validator-voting-integration-test:
-	$(call compile-release,validator-voting,integration-test)
+validator-voting-test:
+	$(call compile-release,validator-voting,test)
 	@mkdir -p tests/res
 	@cp target/near/validator_voting.wasm ./tests/res/validator_voting.wasm
 
-test: validator-voting-integration-test
+test: validator-voting-test
 	@cargo test -- --nocapture
 
 define compile-release
