@@ -1,15 +1,15 @@
 use near_sdk::json_types::U128;
 use near_sdk::store::LookupMap;
 use near_sdk::{
-    env, ext_contract, log, near, require, AccountId, BorshStorageKey, Gas, NearToken,
-    PanicOnDefault, Promise, PromiseError, PublicKey,
+    env, ext_contract, near, require, AccountId, BorshStorageKey, Gas, NearToken,
+    PanicOnDefault, Promise, PublicKey,
 };
 
 type Balance = u128;
 
 const VOTE_GAS: Gas = Gas::from_tgas(100);
-const SET_VALIDATOR_STAKE_GAS: Gas = Gas::from_tgas(200);
 
+#[allow(dead_code)]
 #[ext_contract(ext_voting)]
 trait VotingContract {
     fn vote(&mut self, is_vote: bool);
@@ -68,8 +68,10 @@ impl MockStakingPool {
         let balance = self.internal_account_staked_balance(&account_id);
         require!(balance >= amount, "Not enough stake");
 
-        self.accounts.insert(account_id, balance - amount);
+        self.accounts.insert(account_id.clone(), balance - amount);
         self.total_staked_balance -= amount;
+
+        Promise::new(account_id).transfer(NearToken::from_yoctonear(amount));
 
         self.internal_restake()
     }
@@ -84,35 +86,30 @@ impl MockStakingPool {
             .vote(is_vote)
     }
 
-    // #[private]
-    // pub fn on_stake_action(&self, #[callback_result] result: Result<(), PromiseError>) {
-    //     if result.is_err() {
-    //         log!("Stake action failed");
-    //         return;
-    //     }
-    //
-    //     log!(
-    //         "Validator stake amount: {}",
-    //         env::validator_stake(&env::current_account_id())
-    //     );
-    // }
+    /// Owner's method.
+    /// Update voting account ID
+    pub fn set_voting_account_id(&mut self, voting_account_id: AccountId) -> Promise {
+        self.assert_owner();
+        self.voting_account_id = voting_account_id;
+        self.internal_restake()
+    }
+
+    /// Returns the default voting account ID
+    pub fn get_voting_account_id(&self) -> AccountId {
+        self.voting_account_id.clone()
+    }
+
+    /// Returns the total staking balance.
+    pub fn get_total_staked_balance(&self) -> U128 {
+        self.total_staked_balance.into()
+    }
 
     fn internal_account_staked_balance(&self, account_id: &AccountId) -> Balance {
         *self.accounts.get(account_id).unwrap_or(&0u128)
     }
 
+    /// Sync stake amount to voting contract
     fn internal_restake(&self) -> Promise {
-        // Promise::new(env::current_account_id())
-        //     .stake(
-        //         NearToken::from_yoctonear(self.total_staked_balance),
-        //         self.stake_public_key.clone(),
-        //     )
-        //     .then(
-        //         Self::ext(env::current_account_id())
-        //             .with_static_gas(STAKE_CALLBACK_GAS)
-        //             .on_stake_action(),
-        //     )
-
         ext_voting::ext(self.voting_account_id.clone())
             .set_validator_stake(env::current_account_id(), self.total_staked_balance.into())
     }

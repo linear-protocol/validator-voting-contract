@@ -55,11 +55,6 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
             "validator_account_id": staking_pool_contract.id()
         }))
         .await?;
-    println!(
-        "user account: {}, {:#?}",
-        alice.id(),
-        staked_balance.json::<String>()?
-    );
 
     let outcome = owner
         .call(staking_pool_contract.id(), "vote")
@@ -79,7 +74,8 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[tokio::test] // it takes around 50 minutes
+#[tokio::test]
+#[ignore = "test is time consuming"] // Test takes around 50 minutes
 async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
     let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(300).await?;
 
@@ -190,11 +186,6 @@ async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
             "validator_account_id": staking_pool_contract.id()
         }))
         .await?;
-    println!(
-        "user account: {}, {:#?}",
-        alice.id(),
-        staked_balance.json::<String>()?
-    );
 
     sandbox.fast_forward(500).await?; // let vote expire
 

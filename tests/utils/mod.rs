@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use near_sdk::{near, AccountId, NearToken, PublicKey};
 use near_workspaces::{network::Sandbox, Account, Contract, Worker};
 use serde_json::json;
