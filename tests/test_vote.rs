@@ -19,7 +19,6 @@ async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Erro
     )
     .await?;
 
-    let sandbox = near_workspaces::sandbox().await?;
     let user_account = sandbox.dev_create_account().await?;
     let outcome = user_account
         .call(contract.id(), "vote")
