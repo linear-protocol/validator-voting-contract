@@ -1,3 +1,4 @@
+#!/bin/bash
 export OWNER_ID=mock-owner.testnet
 export VOTING_ACCOUNT_ID=mock-proposal.testnet
 
