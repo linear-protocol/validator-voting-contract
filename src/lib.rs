@@ -165,19 +165,17 @@ impl Contract {
     }
 }
 
+#[cfg(feature = "test")]
 #[near]
 impl Contract {
-    #[cfg(feature = "test")]
     pub fn set_validator_stake(&mut self, validator_account_id: AccountId, amount: U128) {
         utils::set_validator_stake(validator_account_id, amount.0)
     }
 
-    #[cfg(feature = "test")]
     pub fn get_validator_stake(&self, validator_account_id: AccountId) -> U128 {
         utils::get_validator_stake(&validator_account_id).into()
     }
 
-    #[cfg(feature = "test")]
     pub fn get_validator_total_stake(&self) -> U128 {
         validator_total_stake().into()
     }
