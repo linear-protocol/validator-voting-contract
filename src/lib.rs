@@ -4,7 +4,8 @@ mod utils;
 use events::Event;
 use near_sdk::json_types::{U128, U64};
 use near_sdk::{
-    env, ext_contract, near, require, AccountId, EpochHeight, Gas, PanicOnDefault, PromiseError,
+    env, ext_contract, near, require, AccountId, EpochHeight, Gas, PanicOnDefault, Promise,
+    PromiseError,
 };
 use std::collections::HashMap;
 use utils::{validator_stake, validator_total_stake};
