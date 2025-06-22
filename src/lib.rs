@@ -55,21 +55,69 @@ impl Contract {
         }
     }
 
-    pub fn check_owner_id_and_vote(
-        &mut self,
-        owner_account_id: AccountId,
-        staking_pool_id: AccountId,
-        is_vote: bool,
-        #[callback_result] owner_account_id_result: Result<AccountId, PromiseError>,
-    ) {
-        require!(
-            owner_account_id == owner_account_id_result.unwrap(),
-            "Voting is only allowed for the staking pool owner"
-        );
-        self.vote_internal(is_vote, staking_pool_id);
+    /// Method for validators to vote or withdraw the vote.
+    /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
+    pub fn vote(&mut self, is_vote: bool, staking_pool_id: Option<AccountId>) {
+        if let Some(pool_id) = staking_pool_id {
+            ext_staking_pool::ext(pool_id.clone())
+                .with_static_gas(GET_OWNER_ID_GAS)
+                .get_owner_id()
+                .then(
+                    Self::ext(env::current_account_id())
+                        .on_get_owner_id(env::predecessor_account_id(), pool_id, is_vote),
+                );
+        } else {
+            let staking_pool_id = env::predecessor_account_id();
+            self.internal_vote(is_vote, staking_pool_id);
+        }
     }
 
-    fn vote_internal(&mut self, is_vote: bool, account_id: AccountId) {
+    /// Ping to update the votes according to current stake of validators.
+    pub fn ping(&mut self) {
+        require!(
+            env::block_timestamp_ms() < self.deadline_timestamp_ms,
+            "Voting deadline has already passed"
+        );
+        require!(self.result.is_none(), "Voting has already ended");
+        let cur_epoch_height = env::epoch_height();
+        if cur_epoch_height != self.last_epoch_height {
+            let votes = std::mem::take(&mut self.votes);
+            self.total_voted_stake = 0;
+            for (account_id, _) in votes {
+                let account_current_stake = validator_stake(&account_id);
+                self.total_voted_stake += account_current_stake;
+                if account_current_stake > 0 {
+                    self.votes.insert(account_id, account_current_stake);
+                }
+            }
+            self.check_result();
+            self.last_epoch_height = cur_epoch_height;
+        }
+    }
+
+    /// Check the owner id and vote.
+    /// This is called by the staking pool contract to vote on behalf of the staking pool owner.
+    #[private]
+    pub fn on_get_owner_id(
+        &mut self,
+        pool_owner_id: AccountId,
+        staking_pool_id: AccountId,
+        is_vote: bool,
+        #[callback_result] pool_owner_id_result: Result<AccountId, PromiseError>,
+    ) {
+        if let Ok(actual_owner_id) = pool_owner_id_result {
+            require!(
+                pool_owner_id == actual_owner_id,
+                "Voting is only allowed for the staking pool owner"
+            );
+            self.internal_vote(is_vote, staking_pool_id);
+        } else {
+            env::panic_str("Failed to get the staking pool owner id");
+        }
+    }
+
+    /// Internal method for voting.
+    fn internal_vote(&mut self, is_vote: bool, account_id: AccountId) {
         self.ping();
 
         let account_stake = if is_vote {
@@ -106,54 +154,6 @@ impl Contract {
         }
     }
 
-    /// Method for validators to vote or withdraw the vote.
-    /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
-    pub fn vote(&mut self, is_vote: bool, staking_pool_id: Option<AccountId>) {
-        if let Some(pool_id) = staking_pool_id {
-            let strs = pool_id.as_str().split(".").collect::<Vec<&str>>();
-            require!(
-                strs.len() == 3 && strs[1] == "pool" && strs[2] == "near",
-                "New staking_pool_id must be in the format <pool_id>.pool.near"
-            );
-            ext_staking_pool::ext(pool_id.clone())
-                .with_static_gas(GET_OWNER_ID_GAS)
-                .get_owner_id()
-                .then(
-                    Self::ext(env::current_account_id()).check_owner_id_and_vote(
-                        env::predecessor_account_id(),
-                        pool_id,
-                        is_vote,
-                    ),
-                );
-        } else {
-            let staking_pool_id = env::predecessor_account_id();
-            self.vote_internal(is_vote, staking_pool_id);
-        }
-    }
-
-    /// Ping to update the votes according to current stake of validators.
-    pub fn ping(&mut self) {
-        require!(
-            env::block_timestamp_ms() < self.deadline_timestamp_ms,
-            "Voting deadline has already passed"
-        );
-        require!(self.result.is_none(), "Voting has already ended");
-        let cur_epoch_height = env::epoch_height();
-        if cur_epoch_height != self.last_epoch_height {
-            let votes = std::mem::take(&mut self.votes);
-            self.total_voted_stake = 0;
-            for (account_id, _) in votes {
-                let account_current_stake = validator_stake(&account_id);
-                self.total_voted_stake += account_current_stake;
-                if account_current_stake > 0 {
-                    self.votes.insert(account_id, account_current_stake);
-                }
-            }
-            self.check_result();
-            self.last_epoch_height = cur_epoch_height;
-        }
-    }
-
     /// Check whether the voting has ended.
     fn check_result(&mut self) {
         require!(
@@ -174,7 +174,11 @@ impl Contract {
             .emit();
         }
     }
+}
 
+/// View methods
+#[near]
+impl Contract {
     /// Returns a pair of `total_voted_stake` and the total stake.
     /// Note: as a view method, it doesn't recompute the active stake. May need to call `ping` to
     /// update the active stake.
