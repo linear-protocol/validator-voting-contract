@@ -3,7 +3,9 @@ mod utils;
 
 use events::Event;
 use near_sdk::json_types::{U128, U64};
-use near_sdk::{env, near, require, AccountId, EpochHeight, PanicOnDefault};
+use near_sdk::{
+    env, ext_contract, near, require, AccountId, EpochHeight, Gas, PanicOnDefault, PromiseError,
+};
 use std::collections::HashMap;
 use utils::{validator_stake, validator_total_stake};
 
@@ -11,6 +13,8 @@ use utils::{validator_stake, validator_total_stake};
 type Balance = u128;
 /// Timestamp in milliseconds
 type Timestamp = u64;
+
+const GET_OWNER_ID_GAS: Gas = Gas::from_tgas(5);
 
 /// Voting contract for any specific proposal. Once the majority of the stake holders agree to
 /// the proposal, the time will be recorded and the voting ends.
@@ -23,6 +27,11 @@ pub struct Contract {
     total_voted_stake: Balance,
     result: Option<Timestamp>,
     last_epoch_height: EpochHeight,
+}
+
+#[ext_contract(ext_staking_pool)]
+pub trait StakingPoolContract {
+    fn get_owner_id(&self) -> AccountId;
 }
 
 // Implement the contract structure
@@ -46,11 +55,38 @@ impl Contract {
         }
     }
 
+    pub fn check_owner_id_match(
+        &self,
+        owner_account_id: AccountId,
+        #[callback_result] owner_account_id_result: Result<AccountId, PromiseError>,
+    ) {
+        require!(
+            owner_account_id == owner_account_id_result.unwrap(),
+            "Voting is only allowed for the staking pool owner"
+        );
+    }
+
     /// Method for validators to vote or withdraw the vote.
     /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
-    pub fn vote(&mut self, is_vote: bool) {
+    pub fn vote(&mut self, is_vote: bool, staking_pool_id: Option<AccountId>) {
         self.ping();
-        let account_id = env::predecessor_account_id();
+        let account_id = if let Some(pool_id) = staking_pool_id {
+            let strs = pool_id.as_str().split(".").collect::<Vec<&str>>();
+            require!(
+                strs.len() == 3 && strs[1] == "pool" && strs[2] == "near",
+                "New staking_pool_id must be in the format <pool_id>.pool.near"
+            );
+            ext_staking_pool::ext(pool_id.clone())
+                .with_static_gas(GET_OWNER_ID_GAS)
+                .get_owner_id()
+                .then(
+                    Self::ext(env::current_account_id())
+                        .check_owner_id_match(env::predecessor_account_id()),
+                );
+            pool_id
+        } else {
+            env::predecessor_account_id()
+        };
         let account_stake = if is_vote {
             let stake = validator_stake(&account_id);
             require!(stake > 0, format!("{} is not a validator", account_id));
