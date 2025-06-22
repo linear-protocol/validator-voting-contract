@@ -104,6 +104,10 @@ impl MockStakingPool {
         self.total_staked_balance.into()
     }
 
+    pub fn get_owner_id(&self) -> AccountId {
+        self.owner_id.clone()
+    }
+
     fn internal_account_staked_balance(&self, account_id: &AccountId) -> Balance {
         *self.accounts.get(account_id).unwrap_or(&0u128)
     }
