@@ -59,7 +59,6 @@ impl Contract {
     /// Method for validators to vote or withdraw the vote.
     /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
     pub fn vote(&mut self, is_vote: bool, staking_pool_id: AccountId) -> Promise {
-        env::log_str("call vote() function");
         ext_staking_pool::ext(staking_pool_id.clone())
             .with_static_gas(GET_OWNER_ID_GAS)
             .get_owner_id()
