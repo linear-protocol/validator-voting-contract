@@ -62,10 +62,11 @@ impl Contract {
             ext_staking_pool::ext(pool_id.clone())
                 .with_static_gas(GET_OWNER_ID_GAS)
                 .get_owner_id()
-                .then(
-                    Self::ext(env::current_account_id())
-                        .on_get_owner_id(env::predecessor_account_id(), pool_id, is_vote),
-                );
+                .then(Self::ext(env::current_account_id()).on_get_owner_id(
+                    env::predecessor_account_id(),
+                    pool_id,
+                    is_vote,
+                ));
         } else {
             let staking_pool_id = env::predecessor_account_id();
             self.internal_vote(is_vote, staking_pool_id);
