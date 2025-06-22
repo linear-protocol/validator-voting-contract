@@ -96,7 +96,6 @@ impl Contract {
     }
 
     /// Check the owner id and vote.
-    /// This is called by the staking pool contract to vote on behalf of the staking pool owner.
     #[private]
     pub fn on_get_owner_id(
         &mut self,
