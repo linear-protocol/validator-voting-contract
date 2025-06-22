@@ -348,8 +348,6 @@ mod tests {
         for i in 0..201 {
             // vote by each validator
             let voter = validator(i);
-            // let mut context = get_context(&voter);
-            // set_context(&context);
             vote(&mut contract, true, &voter);
 
             // check total voted stake
