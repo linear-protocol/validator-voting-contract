@@ -55,38 +55,23 @@ impl Contract {
         }
     }
 
-    pub fn check_owner_id_match(
-        &self,
+    pub fn check_owner_id_and_vote(
+        &mut self,
         owner_account_id: AccountId,
+        staking_pool_id: AccountId,
+        is_vote: bool,
         #[callback_result] owner_account_id_result: Result<AccountId, PromiseError>,
     ) {
         require!(
             owner_account_id == owner_account_id_result.unwrap(),
             "Voting is only allowed for the staking pool owner"
         );
+        self.vote_internal(is_vote, staking_pool_id);
     }
 
-    /// Method for validators to vote or withdraw the vote.
-    /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
-    pub fn vote(&mut self, is_vote: bool, staking_pool_id: Option<AccountId>) {
+    fn vote_internal(&mut self, is_vote: bool, account_id: AccountId) {
         self.ping();
-        let account_id = if let Some(pool_id) = staking_pool_id {
-            let strs = pool_id.as_str().split(".").collect::<Vec<&str>>();
-            require!(
-                strs.len() == 3 && strs[1] == "pool" && strs[2] == "near",
-                "New staking_pool_id must be in the format <pool_id>.pool.near"
-            );
-            ext_staking_pool::ext(pool_id.clone())
-                .with_static_gas(GET_OWNER_ID_GAS)
-                .get_owner_id()
-                .then(
-                    Self::ext(env::current_account_id())
-                        .check_owner_id_match(env::predecessor_account_id()),
-                );
-            pool_id
-        } else {
-            env::predecessor_account_id()
-        };
+
         let account_stake = if is_vote {
             let stake = validator_stake(&account_id);
             require!(stake > 0, format!("{} is not a validator", account_id));
@@ -118,6 +103,31 @@ impl Contract {
                 validator_id: &account_id,
             }
             .emit();
+        }
+    }
+
+    /// Method for validators to vote or withdraw the vote.
+    /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
+    pub fn vote(&mut self, is_vote: bool, staking_pool_id: Option<AccountId>) {
+        if let Some(pool_id) = staking_pool_id {
+            let strs = pool_id.as_str().split(".").collect::<Vec<&str>>();
+            require!(
+                strs.len() == 3 && strs[1] == "pool" && strs[2] == "near",
+                "New staking_pool_id must be in the format <pool_id>.pool.near"
+            );
+            ext_staking_pool::ext(pool_id.clone())
+                .with_static_gas(GET_OWNER_ID_GAS)
+                .get_owner_id()
+                .then(
+                    Self::ext(env::current_account_id()).check_owner_id_and_vote(
+                        env::predecessor_account_id(),
+                        pool_id,
+                        is_vote,
+                    ),
+                );
+        } else {
+            let staking_pool_id = env::predecessor_account_id();
+            self.vote_internal(is_vote, staking_pool_id);
         }
     }
 
