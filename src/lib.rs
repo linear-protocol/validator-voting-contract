@@ -227,7 +227,6 @@ impl Contract {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
