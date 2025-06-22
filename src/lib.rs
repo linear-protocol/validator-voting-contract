@@ -290,7 +290,7 @@ mod tests {
         ]);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
-        contract.vote(true);
+        contract.vote(true, None);
     }
 
     #[test]
@@ -305,10 +305,10 @@ mod tests {
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote
-        contract.vote(true);
+        contract.vote(true, None);
         assert!(contract.get_result().is_some());
         // vote again. should panic because voting has ended
-        contract.vote(true);
+        contract.vote(true, None);
     }
 
     #[test]
@@ -322,7 +322,7 @@ mod tests {
             let voter = validator(i);
             let mut context = get_context(&voter);
             set_context(&context);
-            contract.vote(true);
+            contract.vote(true, None);
 
             // check total voted stake
             context.is_view(true);
@@ -355,7 +355,7 @@ mod tests {
             // vote by each validator
             let context = get_context_with_epoch_height(&validator(i), i);
             set_context(&context);
-            contract.vote(true);
+            contract.vote(true, None);
             // check votes
             assert_eq!(contract.get_votes().len() as u64, i + 1);
             // check voting result
@@ -378,7 +378,7 @@ mod tests {
         let context = get_context_with_epoch_height(&validator(1), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
-        contract.vote(true);
+        contract.vote(true, None);
         // ping at epoch 2
         validators.insert(validator(1).to_string(), NearToken::from_yoctonear(50));
         let context = get_context_with_epoch_height(&validator(2), 2);
@@ -397,12 +397,12 @@ mod tests {
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote at epoch 1
-        contract.vote(true);
+        contract.vote(true, None);
         assert_eq!(contract.get_votes().len(), 1);
         // withdraw vote at epoch 2
         let context = get_context_with_epoch_height(&validator(1), 2);
         set_context_and_validators(&context, &validators);
-        contract.vote(false);
+        contract.vote(false, None);
         assert!(contract.get_votes().is_empty());
     }
 
@@ -417,7 +417,7 @@ mod tests {
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote at epoch 1
-        contract.vote(true);
+        contract.vote(true, None);
         assert_eq!((contract.get_total_voted_stake().0).0, 40);
         assert_eq!(contract.get_votes().len(), 1);
         // remove validator at epoch 2
@@ -464,7 +464,7 @@ mod tests {
 
         // vote after deadline
         set_context(context.block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000));
-        contract.vote(true);
+        contract.vote(true, None);
     }
 
     #[test]
@@ -475,7 +475,7 @@ mod tests {
 
         // vote at epoch 1
         set_context(&context);
-        contract.vote(true);
+        contract.vote(true, None);
 
         // ping at epoch 2 after deadline
         set_context(
