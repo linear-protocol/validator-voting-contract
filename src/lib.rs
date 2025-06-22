@@ -4,7 +4,8 @@ mod utils;
 use events::Event;
 use near_sdk::json_types::{U128, U64};
 use near_sdk::{
-    env, ext_contract, near, require, AccountId, EpochHeight, Gas, PanicOnDefault, Promise, PromiseError
+    env, ext_contract, near, require, AccountId, EpochHeight, Gas, PanicOnDefault, Promise,
+    PromiseError,
 };
 use std::collections::HashMap;
 use utils::{validator_stake, validator_total_stake};
@@ -298,12 +299,13 @@ mod tests {
         );
     }
 
-    fn vote(
-        contract: &mut Contract,
-        is_vote: bool,
-        staking_pool_id: &AccountId
-    ) {
-        contract.on_get_owner_id(pool_owner(), staking_pool_id.clone(), is_vote, Ok(pool_owner()));
+    fn vote(contract: &mut Contract, is_vote: bool, staking_pool_id: &AccountId) {
+        contract.on_get_owner_id(
+            pool_owner(),
+            staking_pool_id.clone(),
+            is_vote,
+            Ok(pool_owner()),
+        );
     }
 
     #[test]
