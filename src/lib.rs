@@ -16,6 +16,7 @@ type Balance = u128;
 type Timestamp = u64;
 
 #[near(serializers = [json])]
+#[serde(rename_all = "lowercase")]
 pub enum Choice {
     Yes,
     No,
