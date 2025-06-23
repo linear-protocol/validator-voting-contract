@@ -85,6 +85,8 @@ async fn test_only_pool_owner_can_vote() -> Result<(), Box<dyn std::error::Error
         "{:#?}",
         outcome.into_result().unwrap_err()
     );
+
+    Ok(())
 }
 
 #[tokio::test]
