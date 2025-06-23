@@ -22,10 +22,69 @@ async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Erro
     let user_account = sandbox.dev_create_account().await?;
     let outcome = user_account
         .call(contract.id(), "vote")
-        .args_json(json!({"is_vote": true, "staking_pool_id": user_account.id()}))
+        .args_json(json!({"choice": "yes", "staking_pool_id": user_account.id()}))
         .transact()
         .await?;
-    assert!(outcome.is_failure(),);
+    assert!(
+        outcome.is_failure(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let user_account = sandbox.dev_create_account().await?;
+    let outcome = user_account
+        .call(contract.id(), "vote")
+        .args_json(json!({"choice": "no", "staking_pool_id": user_account.id()}))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_failure(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_only_pool_owner_can_vote() -> Result<(), Box<dyn std::error::Error>> {
+    let (staking_pool_contract, voting_contract, sandbox, _owner) = setup_env(None).await?;
+
+    let alice = create_account(&sandbox, "alice", 10000).await?;
+    let outcome = alice
+        .call(staking_pool_contract.id(), "deposit_and_stake")
+        .args_json(json!({}))
+        .gas(Gas::from_tgas(250))
+        .deposit(NearToken::from_near(1000))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let outcome = alice
+        .call(voting_contract.id(), "vote")
+        .args_json(json!({"choice": "yes", "staking_pool_id": staking_pool_contract.id()}))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_failure(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let outcome = alice
+        .call(voting_contract.id(), "vote")
+        .args_json(json!({"choice": "no", "staking_pool_id": staking_pool_contract.id()}))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_failure(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
 
     Ok(())
 }
@@ -48,7 +107,7 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
         outcome.into_result().unwrap_err()
     );
 
-    let staked_balance = voting_contract
+    let _ = voting_contract
         .view("get_validator_stake")
         .args_json(json!({
             "validator_account_id": staking_pool_contract.id()
@@ -58,7 +117,7 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "is_vote": true,
+            "choice": "yes",
             "staking_pool_id": staking_pool_contract.id()
         }))
         .gas(Gas::from_tgas(200))
@@ -129,7 +188,7 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
         let outcome = owner
             .call(voting_contract.id(), "vote")
             .args_json(json!({
-                "is_vote": true,
+                "choice": "yes",
                 "staking_pool_id": staking_pool_contract.id()
             }))
             .gas(Gas::from_tgas(200))
@@ -179,7 +238,7 @@ async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
         outcome.into_result().unwrap_err()
     );
 
-    let staked_balance = voting_contract
+    let _ = voting_contract
         .view("get_validator_stake")
         .args_json(json!({
             "validator_account_id": staking_pool_contract.id()
@@ -191,7 +250,7 @@ async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "is_vote": true,
+            "choice": "yes",
             "staking_pool_id": staking_pool_contract.id()
         }))
         .gas(Gas::from_tgas(200))
@@ -208,7 +267,7 @@ async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tokio::test]
-async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_vote_no_after_vote_yes() -> Result<(), Box<dyn std::error::Error>> {
     let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(2).await?;
 
     let alice = create_account(&sandbox, "alice", 10000).await?;
@@ -240,7 +299,7 @@ async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "is_vote": true,
+            "choice": "yes",
             "staking_pool_id": staking_pool_contracts[0].id()
         }))
         .gas(Gas::from_tgas(200))
@@ -259,7 +318,7 @@ async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "is_vote": false,
+            "choice": "no",
             "staking_pool_id": staking_pool_contracts[0].id()
         }))
         .gas(Gas::from_tgas(200))
@@ -274,6 +333,77 @@ async fn test_withdraw_vote() -> Result<(), Box<dyn std::error::Error>> {
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
     assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_vote_yes_after_vote_no() -> Result<(), Box<dyn std::error::Error>> {
+    let (staking_pool_contracts, voting_contract, sandbox, owner) = setup_env_many(2).await?;
+
+    let alice = create_account(&sandbox, "alice", 10000).await?;
+
+    let outcome = alice
+        .call(staking_pool_contracts[0].id(), "deposit_and_stake")
+        .gas(Gas::from_tgas(250))
+        .deposit(NearToken::from_near(1000))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let outcome = alice
+        .call(staking_pool_contracts[1].id(), "deposit_and_stake")
+        .gas(Gas::from_tgas(250))
+        .deposit(NearToken::from_near(1000))
+        .transact()
+        .await?;
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let outcome = owner
+        .call(voting_contract.id(), "vote")
+        .args_json(json!({
+            "choice": "no",
+            "staking_pool_id": staking_pool_contracts[0].id()
+        }))
+        .gas(Gas::from_tgas(200))
+        .transact()
+        .await?;
+
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let votes = owner.view(voting_contract.id(), "get_votes").await?;
+    assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 0);
+
+    let outcome = owner
+        .call(voting_contract.id(), "vote")
+        .args_json(json!({
+            "choice": "yes",
+            "staking_pool_id": staking_pool_contracts[0].id()
+        }))
+        .gas(Gas::from_tgas(200))
+        .transact()
+        .await?;
+
+    assert!(
+        outcome.is_success(),
+        "{:#?}",
+        outcome.into_result().unwrap_err()
+    );
+
+    let votes = owner.view(voting_contract.id(), "get_votes").await?;
+    assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 1);
 
     Ok(())
 }
@@ -311,7 +441,7 @@ async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "is_vote": true,
+            "choice": "yes",
             "staking_pool_id": staking_pool_contracts[0].id()
         }))
         .gas(Gas::from_tgas(200))
@@ -348,7 +478,7 @@ async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "is_vote": true,
+            "choice": "yes",
             "staking_pool_id": staking_pool_contracts[1].id()
         }))
         .gas(Gas::from_tgas(200))

@@ -1,3 +1,4 @@
+use crate::*;
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::Serialize;
 use near_sdk::serde_json::json;
@@ -17,9 +18,7 @@ pub const EVENT_STANDARD_VERSION: &str = "1.0.0";
 pub enum Event<'a> {
     Voted {
         validator_id: &'a AccountId,
-    },
-    VoteWithdrawn {
-        validator_id: &'a AccountId,
+        choice: &'a Choice,
     },
     ProposalApproved {
         proposal: &'a String,
