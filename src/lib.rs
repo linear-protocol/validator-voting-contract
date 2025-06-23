@@ -306,7 +306,7 @@ mod tests {
         staking_pool_id: &AccountId,
         account: &AccountId,
     ) {
-        contract.on_get_owner_id(
+        contract.on_get_pool_owner_id(
             account.clone(),
             staking_pool_id.clone(),
             choice,
