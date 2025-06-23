@@ -245,7 +245,7 @@ mod tests {
     }
 
     fn pool_owner() -> AccountId {
-        format!("pool-owner").parse().unwrap()
+        "pool-owner".to_string().parse().unwrap()
     }
 
     fn get_contract() -> Contract {
@@ -256,7 +256,7 @@ mod tests {
     }
 
     fn voting_contract_id() -> AccountId {
-        format!("voting-contract").parse().unwrap()
+        "voting-contract".to_string().parse().unwrap()
     }
 
     fn get_context(predecessor_account_id: &AccountId) -> VMContextBuilder {
