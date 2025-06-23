@@ -48,7 +48,7 @@ async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Erro
 
 #[tokio::test]
 async fn test_only_pool_owner_can_vote() -> Result<(), Box<dyn std::error::Error>> {
-    let (staking_pool_contract, voting_contract, sandbox, owner) = setup_env(None).await?;
+    let (staking_pool_contract, voting_contract, sandbox, _owner) = setup_env(None).await?;
 
     let alice = create_account(&sandbox, "alice", 10000).await?;
     let outcome = alice
