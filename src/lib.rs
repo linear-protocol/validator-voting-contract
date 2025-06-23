@@ -122,8 +122,13 @@ impl Contract {
     fn internal_vote(&mut self, choice: Choice, account_id: AccountId) {
         self.ping();
 
-        let account_stake = validator_stake(&account_id);
-        require!(account_stake > 0, format!("{} is not a validator", account_id));
+        let stake = validator_stake(&account_id);
+        require!(stake > 0, format!("{} is not a validator", account_id));
+
+        let account_stake = match choice {
+            Choice::Yes => stake,
+            Choice::No => 0,
+        };
 
         let voted_stake = self.votes.remove(&account_id).unwrap_or_default();
         require!(
@@ -240,7 +245,7 @@ mod tests {
     }
 
     fn pool_owner() -> AccountId {
-        format!("pool-owner").parse().unwrap()
+        "pool-owner".to_string().parse().unwrap()
     }
 
     fn get_contract() -> Contract {
@@ -251,7 +256,7 @@ mod tests {
     }
 
     fn voting_contract_id() -> AccountId {
-        format!("voting-contract").parse().unwrap()
+        "voting-contract".to_string().parse().unwrap()
     }
 
     fn get_context(predecessor_account_id: &AccountId) -> VMContextBuilder {
