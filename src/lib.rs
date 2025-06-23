@@ -62,17 +62,16 @@ impl Contract {
         }
     }
 
-    /// Method for validators to vote or withdraw the vote.
-    /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
+    /// Method for validators to vote with choice `Yes` or `No`.
     /// The method is called by validator owners.
-    pub fn vote(&mut self, is_vote: bool, staking_pool_id: AccountId) -> Promise {
+    pub fn vote(&mut self, choice: Choice, staking_pool_id: AccountId) -> Promise {
         ext_staking_pool::ext(staking_pool_id.clone())
             .with_static_gas(GET_OWNER_ID_GAS)
             .get_owner_id()
             .then(Self::ext(env::current_account_id()).on_get_owner_id(
                 env::predecessor_account_id(),
                 staking_pool_id,
-                is_vote,
+                choice,
             ))
     }
 
@@ -105,7 +104,7 @@ impl Contract {
         &mut self,
         pool_owner_id: AccountId,
         staking_pool_id: AccountId,
-        is_vote: bool,
+        choice: Choice,
         #[callback_result] pool_owner_id_result: Result<AccountId, PromiseError>,
     ) {
         if let Ok(actual_owner_id) = pool_owner_id_result {
@@ -113,7 +112,7 @@ impl Contract {
                 pool_owner_id == actual_owner_id,
                 "Voting is only allowed for the staking pool owner"
             );
-            self.internal_vote(is_vote, staking_pool_id);
+            self.internal_vote(choice, staking_pool_id);
         } else {
             env::panic_str("Failed to get the staking pool owner id");
         }
