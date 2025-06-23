@@ -300,22 +300,22 @@ mod tests {
         );
     }
 
-    fn vote(contract: &mut Contract, choice: Choice, staking_pool_id: &AccountId) {
-        contract.on_get_owner_id(
-            pool_owner(),
-            staking_pool_id.clone(),
-            choice,
-            Ok(pool_owner()),
-        );
-    }
-
     fn vote_with_account(
         contract: &mut Contract,
         choice: Choice,
         staking_pool_id: &AccountId,
         account: &AccountId,
     ) {
-        contract.on_get_owner_id(account, staking_pool_id.clone(), choice, Ok(pool_owner()));
+        contract.on_get_owner_id(
+            account.clone(),
+            staking_pool_id.clone(),
+            choice,
+            Ok(pool_owner()),
+        );
+    }
+
+    fn vote(contract: &mut Contract, choice: Choice, staking_pool_id: &AccountId) {
+        vote_with_account(contract, choice, staking_pool_id, &pool_owner());
     }
 
     #[test]

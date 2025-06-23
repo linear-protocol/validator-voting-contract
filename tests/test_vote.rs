@@ -105,7 +105,7 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
         outcome.into_result().unwrap_err()
     );
 
-    let staked_balance = voting_contract
+    let _ = voting_contract
         .view("get_validator_stake")
         .args_json(json!({
             "validator_account_id": staking_pool_contract.id()
@@ -236,7 +236,7 @@ async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
         outcome.into_result().unwrap_err()
     );
 
-    let staked_balance = voting_contract
+    let _ = voting_contract
         .view("get_validator_stake")
         .args_json(json!({
             "validator_account_id": staking_pool_contract.id()
