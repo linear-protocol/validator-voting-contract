@@ -18,7 +18,7 @@ type Timestamp = u64;
 #[near(serializers = [json])]
 pub enum Choice {
     Yes,
-    No
+    No,
 }
 
 const GET_OWNER_ID_GAS: Gas = Gas::from_tgas(5);
@@ -294,11 +294,11 @@ mod tests {
         );
     }
 
-    fn vote(contract: &mut Contract, is_vote: bool, staking_pool_id: &AccountId) {
+    fn vote(contract: &mut Contract, choice: Choice, staking_pool_id: &AccountId) {
         contract.on_get_owner_id(
             pool_owner(),
             staking_pool_id.clone(),
-            is_vote,
+            choice,
             Ok(pool_owner()),
         );
     }
@@ -313,7 +313,7 @@ mod tests {
         ]);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
-        vote(&mut contract, true, &validator(3));
+        vote(&mut contract, Choice::Yes, &validator(3));
     }
 
     #[test]
@@ -328,10 +328,10 @@ mod tests {
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote
-        vote(&mut contract, true, &validator_id);
+        vote(&mut contract, Choice::Yes, &validator_id);
         assert!(contract.get_result().is_some());
         // vote again. should panic because voting has ended
-        vote(&mut contract, true, &validator_id);
+        vote(&mut contract, Choice::Yes, &validator_id);
     }
 
     #[test]
@@ -343,7 +343,7 @@ mod tests {
         for i in 0..201 {
             // vote by each validator
             let voter = validator(i);
-            vote(&mut contract, true, &voter);
+            vote(&mut contract, Choice::Yes, &voter);
 
             // check total voted stake
             context.is_view(true);
@@ -376,7 +376,7 @@ mod tests {
             // vote by each validator
             let context = get_context_with_epoch_height(&voting_contract_id(), i);
             set_context(&context);
-            vote(&mut contract, true, &validator(i));
+            vote(&mut contract, Choice::Yes, &validator(i));
             // check votes
             assert_eq!(contract.get_votes().len() as u64, i + 1);
             // check voting result
@@ -399,7 +399,7 @@ mod tests {
         let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
-        vote(&mut contract, true, &validator(1));
+        vote(&mut contract, Choice::Yes, &validator(1));
         // ping at epoch 2
         validators.insert(validator(1).to_string(), NearToken::from_yoctonear(50));
         let context = get_context_with_epoch_height(&voting_contract_id(), 2);
@@ -417,13 +417,13 @@ mod tests {
         let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
-        // vote at epoch 1
-        vote(&mut contract, true, &validator(1));
+        // vote YES at epoch 1
+        vote(&mut contract, Choice::Yes, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
-        // withdraw vote at epoch 2
+        // vote NO at epoch 2
         let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
-        vote(&mut contract, false, &validator(1));
+        vote(&mut contract, Choice::No, &validator(1));
         assert!(contract.get_votes().is_empty());
     }
 
@@ -438,7 +438,7 @@ mod tests {
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote at epoch 1
-        vote(&mut contract, true, &validator(1));
+        vote(&mut contract, Choice::Yes, &validator(1));
         assert_eq!((contract.get_total_voted_stake().0).0, 40);
         assert_eq!(contract.get_votes().len(), 1);
         // remove validator at epoch 2
@@ -485,7 +485,7 @@ mod tests {
 
         // vote after deadline
         set_context(context.block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000));
-        vote(&mut contract, true, &validator(0));
+        vote(&mut contract, Choice::Yes, &validator(0));
     }
 
     #[test]
@@ -496,7 +496,7 @@ mod tests {
 
         // vote at epoch 1
         set_context(&context);
-        vote(&mut contract, true, &validator(0));
+        vote(&mut contract, Choice::Yes, &validator(0));
 
         // ping at epoch 2 after deadline
         set_context(
