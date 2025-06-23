@@ -17,6 +17,11 @@ type Timestamp = u64;
 
 const GET_OWNER_ID_GAS: Gas = Gas::from_tgas(5);
 
+#[ext_contract(ext_staking_pool)]
+pub trait StakingPoolContract {
+    fn get_owner_id(&self) -> AccountId;
+}
+
 /// Voting contract for any specific proposal. Once the majority of the stake holders agree to
 /// the proposal, the time will be recorded and the voting ends.
 #[near(contract_state)]
@@ -28,11 +33,6 @@ pub struct Contract {
     total_voted_stake: Balance,
     result: Option<Timestamp>,
     last_epoch_height: EpochHeight,
-}
-
-#[ext_contract(ext_staking_pool)]
-pub trait StakingPoolContract {
-    fn get_owner_id(&self) -> AccountId;
 }
 
 // Implement the contract structure
@@ -58,6 +58,7 @@ impl Contract {
 
     /// Method for validators to vote or withdraw the vote.
     /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
+    /// The method is called by validator owners.
     pub fn vote(&mut self, is_vote: bool, staking_pool_id: AccountId) -> Promise {
         ext_staking_pool::ext(staking_pool_id.clone())
             .with_static_gas(GET_OWNER_ID_GAS)
@@ -254,7 +255,7 @@ mod tests {
         )
     }
 
-    fn contract_account_id() -> AccountId {
+    fn voting_contract_id() -> AccountId {
         format!("voting-contract").parse().unwrap()
     }
 
@@ -267,7 +268,7 @@ mod tests {
         epoch_height: EpochHeight,
     ) -> VMContextBuilder {
         VMContextBuilder::new()
-            .current_account_id(contract_account_id())
+            .current_account_id(voting_contract_id())
             .signer_account_id(accounts(1))
             .predecessor_account_id(predecessor_account_id.clone())
             .storage_usage(1000)
@@ -310,7 +311,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "is not a validator")]
     fn test_non_validator_cannot_vote() {
-        let context = get_context(&contract_account_id());
+        let context = get_context(&voting_contract_id());
         let validators = HashMap::from_iter(vec![
             (validator(0).to_string(), NearToken::from_yoctonear(100)),
             (validator(1).to_string(), NearToken::from_yoctonear(100)),
@@ -324,7 +325,7 @@ mod tests {
     #[should_panic(expected = "Voting has already ended")]
     fn test_vote_again_after_voting_ends() {
         let validator_id = validator(0);
-        let context = get_context(&contract_account_id());
+        let context = get_context(&voting_contract_id());
         let validators = HashMap::from_iter(vec![(
             validator_id.to_string(),
             NearToken::from_yoctonear(100),
@@ -340,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_voting_simple() {
-        let mut context = get_context(&contract_account_id());
+        let mut context = get_context(&voting_contract_id());
         set_context(&context);
         let mut contract = get_contract();
 
@@ -372,13 +373,13 @@ mod tests {
 
     #[test]
     fn test_voting_with_epoch_change() {
-        let context = get_context(&contract_account_id());
+        let context = get_context(&voting_contract_id());
         set_context(&context);
         let mut contract = get_contract();
 
         for i in 0..201 {
             // vote by each validator
-            let context = get_context_with_epoch_height(&contract_account_id(), i);
+            let context = get_context_with_epoch_height(&voting_contract_id(), i);
             set_context(&context);
             vote(&mut contract, true, &validator(i));
             // check votes
@@ -400,13 +401,13 @@ mod tests {
             (validator(3).to_string(), NearToken::from_yoctonear(10)),
         ]);
         // vote at epoch 1
-        let context = get_context_with_epoch_height(&contract_account_id(), 1);
+        let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         vote(&mut contract, true, &validator(1));
         // ping at epoch 2
         validators.insert(validator(1).to_string(), NearToken::from_yoctonear(50));
-        let context = get_context_with_epoch_height(&contract_account_id(), 2);
+        let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         contract.ping();
         assert!(contract.get_result().is_some());
@@ -418,14 +419,14 @@ mod tests {
             (validator(1).to_string(), NearToken::from_yoctonear(10)),
             (validator(2).to_string(), NearToken::from_yoctonear(10)),
         ]);
-        let context = get_context_with_epoch_height(&contract_account_id(), 1);
+        let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote at epoch 1
         vote(&mut contract, true, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
         // withdraw vote at epoch 2
-        let context = get_context_with_epoch_height(&contract_account_id(), 2);
+        let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         vote(&mut contract, false, &validator(1));
         assert!(contract.get_votes().is_empty());
@@ -438,7 +439,7 @@ mod tests {
             (validator(2).to_string(), NearToken::from_yoctonear(10)),
             (validator(3).to_string(), NearToken::from_yoctonear(10)),
         ]);
-        let context = get_context_with_epoch_height(&contract_account_id(), 1);
+        let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
         // vote at epoch 1
@@ -447,7 +448,7 @@ mod tests {
         assert_eq!(contract.get_votes().len(), 1);
         // remove validator at epoch 2
         validators.remove(&validator(1).to_string());
-        let context = get_context_with_epoch_height(&contract_account_id(), 2);
+        let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         // ping will update total voted stake
         contract.ping();
@@ -485,7 +486,7 @@ mod tests {
     #[should_panic(expected = "Voting deadline has already passed")]
     fn test_vote_after_deadline() {
         let mut contract = get_contract();
-        let mut context = get_context(&contract_account_id());
+        let mut context = get_context(&voting_contract_id());
 
         // vote after deadline
         set_context(context.block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000));
@@ -496,7 +497,7 @@ mod tests {
     #[should_panic(expected = "Voting deadline has already passed")]
     fn test_ping_after_deadline() {
         let mut contract = get_contract();
-        let mut context = get_context(&contract_account_id());
+        let mut context = get_context(&voting_contract_id());
 
         // vote at epoch 1
         set_context(&context);
