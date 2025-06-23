@@ -17,9 +17,7 @@ pub const EVENT_STANDARD_VERSION: &str = "1.0.0";
 pub enum Event<'a> {
     Voted {
         validator_id: &'a AccountId,
-    },
-    VoteWithdrawn {
-        validator_id: &'a AccountId,
+        choice: &'a Choice,
     },
     ProposalApproved {
         proposal: &'a String,

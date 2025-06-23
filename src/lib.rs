@@ -15,6 +15,12 @@ type Balance = u128;
 /// Timestamp in milliseconds
 type Timestamp = u64;
 
+#[near(serializers = [json])]
+pub enum Choice {
+    Yes,
+    No
+}
+
 const GET_OWNER_ID_GAS: Gas = Gas::from_tgas(5);
 
 #[ext_contract(ext_staking_pool)]
@@ -114,16 +120,12 @@ impl Contract {
     }
 
     /// Internal method for voting.
-    fn internal_vote(&mut self, is_vote: bool, account_id: AccountId) {
+    fn internal_vote(&mut self, choice: Choice, account_id: AccountId) {
         self.ping();
 
-        let account_stake = if is_vote {
-            let stake = validator_stake(&account_id);
-            require!(stake > 0, format!("{} is not a validator", account_id));
-            stake
-        } else {
-            0
-        };
+        let account_stake = validator_stake(&account_id);
+        require!(account_stake > 0, format!("{} is not a validator", account_id));
+
         let voted_stake = self.votes.remove(&account_id).unwrap_or_default();
         require!(
             voted_stake <= self.total_voted_stake,
@@ -138,17 +140,11 @@ impl Contract {
             self.check_result();
         }
         // emit event
-        if is_vote {
-            Event::Voted {
-                validator_id: &account_id,
-            }
-            .emit();
-        } else {
-            Event::VoteWithdrawn {
-                validator_id: &account_id,
-            }
-            .emit();
+        Event::Voted {
+            validator_id: &account_id,
+            choice: &choice,
         }
+        .emit();
     }
 
     /// Check whether the voting has ended.
