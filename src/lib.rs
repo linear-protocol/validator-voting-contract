@@ -63,19 +63,6 @@ impl Contract {
         }
     }
 
-    /// Method for validators to vote with choice `Yes` or `No`.
-    /// The method is called by validator owners.
-    pub fn vote(&mut self, choice: Choice, staking_pool_id: AccountId) -> Promise {
-        ext_staking_pool::ext(staking_pool_id.clone())
-            .with_static_gas(GET_OWNER_ID_GAS)
-            .get_owner_id()
-            .then(Self::ext(env::current_account_id()).on_get_owner_id(
-                env::predecessor_account_id(),
-                staking_pool_id,
-                choice,
-            ))
-    }
-
     /// Ping to update the votes according to current stake of validators.
     pub fn ping(&mut self) {
         require!(
@@ -99,9 +86,22 @@ impl Contract {
         }
     }
 
-    /// Check the owner id and vote.
+    /// Method for validators to vote with choice `Yes` or `No`.
+    /// The method is called by validator owners.
+    pub fn vote(&mut self, choice: Choice, staking_pool_id: AccountId) -> Promise {
+        ext_staking_pool::ext(staking_pool_id.clone())
+            .with_static_gas(GET_OWNER_ID_GAS)
+            .get_owner_id()
+            .then(Self::ext(env::current_account_id()).on_get_pool_owner_id(
+                env::predecessor_account_id(),
+                staking_pool_id,
+                choice,
+            ))
+    }
+
+    /// Check the pool owner id and vote.
     #[private]
-    pub fn on_get_owner_id(
+    pub fn on_get_pool_owner_id(
         &mut self,
         pool_owner_id: AccountId,
         staking_pool_id: AccountId,
