@@ -22,7 +22,7 @@ async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Erro
     let user_account = sandbox.dev_create_account().await?;
     let outcome = user_account
         .call(contract.id(), "vote")
-        .args_json(json!({"choice": "yes", "staking_pool_id": user_account.id()}))
+        .args_json(json!({"vote": "yes", "staking_pool_id": user_account.id()}))
         .transact()
         .await?;
     assert!(
@@ -34,7 +34,7 @@ async fn test_non_validator_cannot_vote() -> Result<(), Box<dyn std::error::Erro
     let user_account = sandbox.dev_create_account().await?;
     let outcome = user_account
         .call(contract.id(), "vote")
-        .args_json(json!({"choice": "no", "staking_pool_id": user_account.id()}))
+        .args_json(json!({"vote": "no", "staking_pool_id": user_account.id()}))
         .transact()
         .await?;
     assert!(
@@ -66,7 +66,7 @@ async fn test_only_pool_owner_can_vote() -> Result<(), Box<dyn std::error::Error
 
     let outcome = alice
         .call(voting_contract.id(), "vote")
-        .args_json(json!({"choice": "yes", "staking_pool_id": staking_pool_contract.id()}))
+        .args_json(json!({"vote": "yes", "staking_pool_id": staking_pool_contract.id()}))
         .transact()
         .await?;
     assert!(
@@ -77,7 +77,7 @@ async fn test_only_pool_owner_can_vote() -> Result<(), Box<dyn std::error::Error
 
     let outcome = alice
         .call(voting_contract.id(), "vote")
-        .args_json(json!({"choice": "no", "staking_pool_id": staking_pool_contract.id()}))
+        .args_json(json!({"vote": "no", "staking_pool_id": staking_pool_contract.id()}))
         .transact()
         .await?;
     assert!(
@@ -117,7 +117,7 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "choice": "yes",
+            "vote": "yes",
             "staking_pool_id": staking_pool_contract.id()
         }))
         .gas(Gas::from_tgas(200))
@@ -188,7 +188,7 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
         let outcome = owner
             .call(voting_contract.id(), "vote")
             .args_json(json!({
-                "choice": "yes",
+                "vote": "yes",
                 "staking_pool_id": staking_pool_contract.id()
             }))
             .gas(Gas::from_tgas(200))
@@ -250,7 +250,7 @@ async fn test_vote_expiration() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "choice": "yes",
+            "vote": "yes",
             "staking_pool_id": staking_pool_contract.id()
         }))
         .gas(Gas::from_tgas(200))
@@ -299,7 +299,7 @@ async fn test_vote_no_after_vote_yes() -> Result<(), Box<dyn std::error::Error>>
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "choice": "yes",
+            "vote": "yes",
             "staking_pool_id": staking_pool_contracts[0].id()
         }))
         .gas(Gas::from_tgas(200))
@@ -318,7 +318,7 @@ async fn test_vote_no_after_vote_yes() -> Result<(), Box<dyn std::error::Error>>
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "choice": "no",
+            "vote": "no",
             "staking_pool_id": staking_pool_contracts[0].id()
         }))
         .gas(Gas::from_tgas(200))
@@ -370,7 +370,7 @@ async fn test_vote_yes_after_vote_no() -> Result<(), Box<dyn std::error::Error>>
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "choice": "no",
+            "vote": "no",
             "staking_pool_id": staking_pool_contracts[0].id()
         }))
         .gas(Gas::from_tgas(200))
@@ -389,7 +389,7 @@ async fn test_vote_yes_after_vote_no() -> Result<(), Box<dyn std::error::Error>>
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "choice": "yes",
+            "vote": "yes",
             "staking_pool_id": staking_pool_contracts[0].id()
         }))
         .gas(Gas::from_tgas(200))
@@ -441,7 +441,7 @@ async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "choice": "yes",
+            "vote": "yes",
             "staking_pool_id": staking_pool_contracts[0].id()
         }))
         .gas(Gas::from_tgas(200))
@@ -478,7 +478,7 @@ async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = owner
         .call(voting_contract.id(), "vote")
         .args_json(json!({
-            "choice": "yes",
+            "vote": "yes",
             "staking_pool_id": staking_pool_contracts[1].id()
         }))
         .gas(Gas::from_tgas(200))
