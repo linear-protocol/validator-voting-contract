@@ -495,6 +495,14 @@ mod tests {
         contract.ping();
         assert_eq!((contract.get_total_voted_stake().0).0, 0);
         assert_eq!(contract.get_votes().len(), 1);
+        // validator(1) is back to validator set at epoch 3
+        validators.insert(validator(1).to_string(), NearToken::from_yoctonear(40));
+        let context = get_context_with_epoch_height(&voting_contract_id(), 3);
+        set_context_and_validators(&context, &validators);
+        // ping will update total voted stake after validator(1) is back
+        contract.ping();
+        assert_eq!((contract.get_total_voted_stake().0).0, 40);
+        assert_eq!(contract.get_votes().len(), 1);
     }
 
     #[test]
