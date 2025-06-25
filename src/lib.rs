@@ -77,9 +77,7 @@ impl Contract {
             for (account_id, _) in votes {
                 let account_current_stake = validator_stake(&account_id);
                 self.total_voted_stake += account_current_stake;
-                if account_current_stake > 0 {
-                    self.votes.insert(account_id, account_current_stake);
-                }
+                self.votes.insert(account_id, account_current_stake);
             }
             self.check_result();
             self.last_epoch_height = cur_epoch_height;
@@ -497,7 +495,7 @@ mod tests {
         // ping will update total voted stake
         contract.ping();
         assert_eq!((contract.get_total_voted_stake().0).0, 0);
-        assert_eq!(contract.get_votes().len(), 0);
+        assert_eq!(contract.get_votes().len(), 1);
     }
 
     #[test]
