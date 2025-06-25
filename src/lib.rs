@@ -72,12 +72,11 @@ impl Contract {
         require!(self.result.is_none(), "Voting has already ended");
         let cur_epoch_height = env::epoch_height();
         if cur_epoch_height != self.last_epoch_height {
-            let votes = std::mem::take(&mut self.votes);
             self.total_voted_stake = 0;
-            for (account_id, _) in votes {
-                let account_current_stake = validator_stake(&account_id);
+            for (account_id, stake) in self.votes.iter_mut() {
+                let account_current_stake = validator_stake(account_id);
                 self.total_voted_stake += account_current_stake;
-                self.votes.insert(account_id, account_current_stake);
+                *stake = account_current_stake;
             }
             self.check_result();
             self.last_epoch_height = cur_epoch_height;
