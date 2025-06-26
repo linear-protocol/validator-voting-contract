@@ -493,7 +493,7 @@ async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
     let votes = votes.json::<HashMap<AccountId, String>>()?;
-    assert_eq!(votes.len(), 1);
+    assert_eq!(votes.len(), 2);
     assert!(votes.contains_key(staking_pool_contracts[1].id()));
 
     Ok(())

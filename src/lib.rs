@@ -72,14 +72,11 @@ impl Contract {
         require!(self.result.is_none(), "Voting has already ended");
         let cur_epoch_height = env::epoch_height();
         if cur_epoch_height != self.last_epoch_height {
-            let votes = std::mem::take(&mut self.votes);
             self.total_voted_stake = 0;
-            for (account_id, _) in votes {
-                let account_current_stake = validator_stake(&account_id);
+            for (account_id, stake) in self.votes.iter_mut() {
+                let account_current_stake = validator_stake(account_id);
                 self.total_voted_stake += account_current_stake;
-                if account_current_stake > 0 {
-                    self.votes.insert(account_id, account_current_stake);
-                }
+                *stake = account_current_stake;
             }
             self.check_result();
             self.last_epoch_height = cur_epoch_height;
@@ -497,7 +494,15 @@ mod tests {
         // ping will update total voted stake
         contract.ping();
         assert_eq!((contract.get_total_voted_stake().0).0, 0);
-        assert_eq!(contract.get_votes().len(), 0);
+        assert_eq!(contract.get_votes().len(), 1);
+        // validator(1) is back to validator set at epoch 3
+        validators.insert(validator(1).to_string(), NearToken::from_yoctonear(40));
+        let context = get_context_with_epoch_height(&voting_contract_id(), 3);
+        set_context_and_validators(&context, &validators);
+        // ping will update total voted stake after validator(1) is back
+        contract.ping();
+        assert_eq!((contract.get_total_voted_stake().0).0, 40);
+        assert_eq!(contract.get_votes().len(), 1);
     }
 
     #[test]
