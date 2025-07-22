@@ -422,7 +422,7 @@ mod tests {
             &validators,
         );
         contract.ping();
-        assert_eq!(contract.get_result().unwrap(), true);
+        assert!(contract.get_result().unwrap());
 
         // ping again. should panic because voting has ended
         contract.ping();
@@ -483,7 +483,7 @@ mod tests {
                 .epoch_height(2),
         );
         contract.ping();
-        assert_eq!(contract.get_result().unwrap(), true);
+        assert!(contract.get_result().unwrap());
     }
 
     #[test]
@@ -510,7 +510,7 @@ mod tests {
                 .epoch_height(2),
         );
         contract.ping();
-        assert_eq!(contract.get_result().unwrap(), true);
+        assert!(contract.get_result().unwrap());
     }
 
     #[test]
@@ -528,7 +528,7 @@ mod tests {
         vote(&mut contract, Vote::Yes, &validator(2));
         // validator 3 votes NO at epoch 1
         vote(&mut contract, Vote::No, &validator(3));
-    
+
         // ping at epoch 2
         validators.insert(validator(2).to_string(), NearToken::from_yoctonear(25));
         let mut context = get_context_with_epoch_height(&voting_contract_id(), 2);
@@ -542,10 +542,10 @@ mod tests {
             context
                 .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
                 .epoch_height(3),
-            &validators
+            &validators,
         );
         contract.ping();
-        assert_eq!(contract.get_result().unwrap(), true);
+        assert!(contract.get_result().unwrap());
     }
 
     #[test]
@@ -561,21 +561,30 @@ mod tests {
         // vote YES at epoch 1
         vote(&mut contract, Vote::Yes, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
-        assert_eq!(contract.get_total_voted_stake(), (U128(10), U128(10), U128(20)));
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(10), U128(10), U128(20))
+        );
 
         // vote NO at epoch 2
         let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         vote(&mut contract, Vote::No, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
-        assert_eq!(contract.get_total_voted_stake(), (U128(0), U128(10), U128(20)));
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(0), U128(10), U128(20))
+        );
 
         // vote YES at epoch 3
         let context = get_context_with_epoch_height(&voting_contract_id(), 3);
         set_context_and_validators(&context, &validators);
         vote(&mut contract, Vote::Yes, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
-        assert_eq!(contract.get_total_voted_stake(), (U128(10), U128(10), U128(20)));
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(10), U128(10), U128(20))
+        );
     }
 
     #[test]
@@ -591,7 +600,10 @@ mod tests {
 
         // vote at epoch 1
         vote(&mut contract, Vote::Yes, &validator(1));
-        assert_eq!(contract.get_total_voted_stake(), (U128(40), U128(40), U128(60)));
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(40), U128(40), U128(60))
+        );
         assert_eq!(contract.get_votes().len(), 1);
 
         // remove validator 1 at epoch 2, i.e. validator 1 is kicked out
@@ -600,7 +612,10 @@ mod tests {
         set_context_and_validators(&context, &validators);
         // ping will update total voted stake
         contract.ping();
-        assert_eq!(contract.get_total_voted_stake(), (U128(0), U128(0), U128(20)));
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(0), U128(0), U128(20))
+        );
         assert_eq!(contract.get_votes().len(), 1);
 
         // validator(1) is back to validator set at epoch 3
@@ -609,7 +624,10 @@ mod tests {
         set_context_and_validators(&context, &validators);
         // ping will update total voted stake after validator(1) is back
         contract.ping();
-        assert_eq!(contract.get_total_voted_stake(), (U128(40), U128(40), U128(60)));
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(40), U128(40), U128(60))
+        );
         assert_eq!(contract.get_votes().len(), 1);
     }
 
