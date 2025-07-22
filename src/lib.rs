@@ -46,7 +46,7 @@ pub struct Contract {
     votes: HashMap<AccountId, VotedStake>,
     yes_stake: Balance,         // YES voted stake
     total_voted_stake: Balance, // YES + NO
-    result: Option<Timestamp>,
+    result: Option<bool>,
     last_epoch_height: EpochHeight,
 }
 
@@ -98,11 +98,6 @@ impl Contract {
     /// Method for validators to vote with `Yes` or `No`.
     /// The method is called by validator owners.
     pub fn vote(&mut self, vote: Vote, staking_pool_id: AccountId) -> Promise {
-        require!(
-            env::block_timestamp_ms() < self.deadline_timestamp_ms,
-            "Voting deadline has already passed"
-        );
-
         ext_staking_pool::ext(staking_pool_id.clone())
             .with_static_gas(GET_OWNER_ID_GAS)
             .get_owner_id()
@@ -135,6 +130,11 @@ impl Contract {
 
     /// Internal method for voting.
     fn internal_vote(&mut self, vote: Vote, account_id: AccountId) {
+        require!(
+            env::block_timestamp_ms() < self.deadline_timestamp_ms,
+            "Voting deadline has already passed"
+        );
+
         self.ping();
 
         let stake = validator_stake(&account_id);
@@ -190,10 +190,22 @@ impl Contract {
         if self.total_voted_stake > total_stake / 3
             && self.yes_stake > self.total_voted_stake * 2 / 3
         {
-            self.result = Some(env::block_timestamp_ms());
+            self.result = Some(true);
             Event::ProposalApproved {
                 proposal: &self.proposal,
                 approval_timestamp_ms: &U64::from(env::block_timestamp_ms()),
+                deadline_timestamp_ms: &U64::from(self.deadline_timestamp_ms),
+                yes_stake: &U128::from(self.yes_stake),
+                voted_stake: &U128::from(self.total_voted_stake),
+                total_stake: &U128::from(total_stake),
+                num_votes: &U64::from(self.votes.len() as u64),
+            }
+            .emit();
+        } else {
+            self.result = Some(false);
+            Event::ProposalRejected {
+                proposal: &self.proposal,
+                rejection_timestamp_ms: &U64::from(env::block_timestamp_ms()),
                 deadline_timestamp_ms: &U64::from(self.deadline_timestamp_ms),
                 yes_stake: &U128::from(self.yes_stake),
                 voted_stake: &U128::from(self.total_voted_stake),
@@ -234,8 +246,8 @@ impl Contract {
             .collect()
     }
 
-    /// Get the timestamp of when the voting finishes. `None` means the voting hasn't ended yet.
-    pub fn get_result(&self) -> Option<Timestamp> {
+    /// Get the voting result. `None` means the voting hasn't ended yet.
+    pub fn get_result(&self) -> Option<bool> {
         self.result
     }
 
@@ -383,9 +395,9 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Voting has already ended")]
-    fn test_vote_again_after_voting_ends() {
+    fn test_ping_again_after_voting_ends() {
         let validator_id = validator(0);
-        let context = get_context(&voting_contract_id());
+        let mut context = get_context(&voting_contract_id());
         let validators = HashMap::from_iter(vec![(
             validator_id.to_string(),
             NearToken::from_yoctonear(100),
@@ -394,9 +406,20 @@ mod tests {
         let mut contract = get_contract();
         // vote
         vote(&mut contract, Vote::Yes, &validator_id);
-        assert!(contract.get_result().is_some());
-        // vote again. should panic because voting has ended
-        vote(&mut contract, Vote::Yes, &validator_id);
+        // vote result is none because deadline has not passed,
+        // although all validators have voted
+        assert!(contract.get_result().is_none());
+
+        // ping at epoch 2 after deadline
+        set_context(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(2),
+        );
+        contract.ping();
+
+        // ping again. should panic because voting has ended
+        contract.ping();
     }
 
     #[test]
@@ -444,11 +467,7 @@ mod tests {
             assert_eq!(contract.get_votes(), expected_votes);
             assert_eq!(contract.get_votes().len() as u64, i + 1);
             // check voting result
-            if i < 200 {
-                assert!(contract.get_result().is_none());
-            } else {
-                assert!(contract.get_result().is_some());
-            }
+            assert!(contract.get_result().is_none());
         }
     }
 
@@ -465,12 +484,8 @@ mod tests {
             vote(&mut contract, Vote::Yes, &validator(i));
             // check votes
             assert_eq!(contract.get_votes().len() as u64, i + 1);
-            // check voting result
-            if i < 200 {
-                assert!(contract.get_result().is_none());
-            } else {
-                assert!(contract.get_result().is_some());
-            }
+            // voting result is none since deadline has not passed
+            assert!(contract.get_result().is_none());
         }
     }
 
@@ -491,7 +506,8 @@ mod tests {
         let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         contract.ping();
-        assert!(contract.get_result().is_some());
+        // voting result is none since deadline has not passed
+        assert!(contract.get_result().is_none());
     }
 
     #[test]
