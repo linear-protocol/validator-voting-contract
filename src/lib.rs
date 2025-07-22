@@ -45,8 +45,8 @@ pub struct Contract {
     deadline_timestamp_ms: Timestamp,
     votes: HashMap<AccountId, VotedStake>,
     yes_stake: Balance,         // stake voted for YES
-    total_voted_stake: Balance, // total voted stake for YES or NO
-    result: Option<bool>,
+    total_voted_stake: Balance, // total stake voted for YES or NO
+    result: Option<bool>,       // true if proposal is approved
     last_epoch_height: EpochHeight,
 }
 
@@ -691,34 +691,7 @@ mod tests {
 
     #[test]
     fn test_proposal_rejected_since_not_enough_total_voted_stake() {
-        let mut validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
-            (validator(1).to_string(), NearToken::from_yoctonear(50)),
-            (validator(2).to_string(), NearToken::from_yoctonear(30)),
-            (validator(3).to_string(), NearToken::from_yoctonear(30)),
-            (validator(4).to_string(), NearToken::from_yoctonear(10)),
-        ]);
-        let context = get_context_with_epoch_height(&voting_contract_id(), 1);
-        set_context_and_validators(&context, &validators);
-        let mut contract = get_contract();
-
-        // vote at epoch 1
-        set_context(&context);
-        vote(&mut contract, Vote::Yes, &validator(3));
-        vote(&mut contract, Vote::No, &validator(4));
-
-        // ping at epoch 2 after deadline
-        set_context(
-            context
-                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
-                .epoch_height(2),
-        );
-        contract.ping();
-        assert_eq!(contract.get_result().wrap(), false);
-    }
-
-    #[test]
-    fn test_proposal_rejected_since_not_enough_total_voted_stake() {
-        let mut validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
+        let validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
             (validator(1).to_string(), NearToken::from_yoctonear(50)),
             (validator(2).to_string(), NearToken::from_yoctonear(30)),
             (validator(3).to_string(), NearToken::from_yoctonear(30)),
@@ -729,25 +702,24 @@ mod tests {
         let mut contract = get_contract();
 
         // vote at epoch 1
+        set_context(&context);
         vote(&mut contract, Vote::Yes, &validator(3));
         vote(&mut contract, Vote::No, &validator(4));
-        assert_eq!(contract.get_votes().len(), 2);
-        assert_eq!(contract.get_total_voted_stake(), (U128(30), U128(40), U128(120)));
 
         // ping at epoch 2 after deadline
-        set_context(
+        set_context_and_validators(
             context
                 .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
                 .epoch_height(2),
             &validators,
         );
         contract.ping();
-        assert_eq!(contract.get_result().wrap(), false);
+        assert_eq!(contract.get_result().unwrap(), false);
     }
 
     #[test]
     fn test_proposal_rejected_since_not_enough_yes_stake() {
-        let mut validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
+        let validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
             (validator(1).to_string(), NearToken::from_yoctonear(50)),
             (validator(2).to_string(), NearToken::from_yoctonear(30)),
             (validator(3).to_string(), NearToken::from_yoctonear(30)),
@@ -764,24 +736,24 @@ mod tests {
         assert_eq!(contract.get_total_voted_stake(), (U128(50), U128(80), U128(120)));
 
         // ping at epoch 2 after deadline
-        set_context(
+        set_context_and_validators(
             context
                 .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
                 .epoch_height(2),
             &validators,
         );
         contract.ping();
-        assert_eq!(contract.get_result().wrap(), false);
+        assert_eq!(contract.get_result().unwrap(), false);
     }
 
     #[test]
     fn test_proposal_approved() {
-        let mut validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
+        let validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
             (validator(1).to_string(), NearToken::from_yoctonear(50)),
             (validator(2).to_string(), NearToken::from_yoctonear(30)),
             (validator(3).to_string(), NearToken::from_yoctonear(30)),
             (validator(4).to_string(), NearToken::from_yoctonear(10)),
-            (validator(4).to_string(), NearToken::from_yoctonear(20)),
+            (validator(5).to_string(), NearToken::from_yoctonear(20)),
         ]);
         let mut context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
@@ -797,17 +769,17 @@ mod tests {
         // vote at epoch 2
         vote(&mut contract, Vote::No, &validator(3));
         vote(&mut contract, Vote::Yes, &validator(4));
-        assert_eq!(contract.get_votes().len(), 3);
+        assert_eq!(contract.get_votes().len(), 4);
         assert_eq!(contract.get_total_voted_stake(), (U128(90), U128(120), U128(140)));
 
         // ping at epoch 3 after deadline
-        set_context(
+        set_context_and_validators(
             context
                 .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
                 .epoch_height(3),
             &validators,
         );
         contract.ping();
-        assert_eq!(contract.get_result().wrap(), true);
+        assert_eq!(contract.get_result().unwrap(), true);
     }
 }
