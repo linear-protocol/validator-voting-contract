@@ -1,9 +1,9 @@
 use near_sdk::json_types::U128;
 use near_sdk::{AccountId, Gas, NearToken};
 use serde_json::json;
-use validator_voting::Vote;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
+use validator_voting::Vote;
 
 mod utils;
 use utils::*;

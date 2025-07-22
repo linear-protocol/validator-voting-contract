@@ -715,7 +715,7 @@ mod tests {
             &validators,
         );
         contract.ping();
-        assert_eq!(contract.get_result().unwrap(), false);
+        assert!(!contract.get_result().unwrap());
     }
 
     #[test]
@@ -734,7 +734,10 @@ mod tests {
         vote(&mut contract, Vote::Yes, &validator(1));
         vote(&mut contract, Vote::No, &validator(2));
         assert_eq!(contract.get_votes().len(), 2);
-        assert_eq!(contract.get_total_voted_stake(), (U128(50), U128(80), U128(120)));
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(50), U128(80), U128(120))
+        );
 
         // ping at epoch 2 after deadline
         set_context_and_validators(
@@ -744,7 +747,7 @@ mod tests {
             &validators,
         );
         contract.ping();
-        assert_eq!(contract.get_result().unwrap(), false);
+        assert!(!contract.get_result().unwrap());
     }
 
     #[test]
@@ -765,13 +768,19 @@ mod tests {
         vote(&mut contract, Vote::Yes, &validator(2));
         vote(&mut contract, Vote::No, &validator(4));
         assert_eq!(contract.get_votes().len(), 3);
-        assert_eq!(contract.get_total_voted_stake(), (U128(80), U128(90), U128(140)));
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(80), U128(90), U128(140))
+        );
 
         // vote at epoch 2
         vote(&mut contract, Vote::No, &validator(3));
         vote(&mut contract, Vote::Yes, &validator(4));
         assert_eq!(contract.get_votes().len(), 4);
-        assert_eq!(contract.get_total_voted_stake(), (U128(90), U128(120), U128(140)));
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(90), U128(120), U128(140))
+        );
 
         // ping at epoch 3 after deadline
         set_context_and_validators(
@@ -781,6 +790,6 @@ mod tests {
             &validators,
         );
         contract.ping();
-        assert_eq!(contract.get_result().unwrap(), true);
+        assert!(contract.get_result().unwrap());
     }
 }
