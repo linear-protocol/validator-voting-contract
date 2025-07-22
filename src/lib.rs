@@ -85,10 +85,7 @@ impl Contract {
                 if voted_stake.vote == Vote::Yes {
                     self.yes_stake += account_current_stake;
                 }
-                *voted_stake = VotedStake {
-                    vote: voted_stake.vote.clone(),
-                    stake: account_current_stake,
-                };
+                voted_stake.stake = account_current_stake;
             }
             self.check_result();
             self.last_epoch_height = cur_epoch_height;
@@ -137,18 +134,27 @@ impl Contract {
 
         self.ping();
 
-        let stake = validator_stake(&account_id);
-        require!(stake > 0, format!("{} is not a validator", account_id));
+        let account_stake = validator_stake(&account_id);
+        require!(
+            account_stake > 0,
+            format!("{} is not a validator", account_id)
+        );
 
-        let account_stake = match vote {
-            Vote::Yes => stake,
+        let account_stake_yes = match vote {
+            Vote::Yes => account_stake,
             Vote::No => 0,
         };
 
-        let prev_stake = if let Some(voted_stake) = self.votes.get(&account_id) {
-            voted_stake.stake
+        let (prev_stake, prev_stake_yes) = if let Some(voted_stake) = self.votes.get(&account_id) {
+            (
+                voted_stake.stake,
+                match voted_stake.vote {
+                    Vote::Yes => voted_stake.stake,
+                    Vote::No => 0,
+                },
+            )
         } else {
-            0
+            (0, 0)
         };
         require!(
             prev_stake <= self.total_voted_stake,
@@ -158,9 +164,7 @@ impl Contract {
             )
         );
         self.total_voted_stake = self.total_voted_stake + account_stake - prev_stake;
-        if vote == Vote::Yes {
-            self.yes_stake = self.yes_stake + account_stake - prev_stake;
-        }
+        self.yes_stake = self.yes_stake + account_stake_yes - prev_stake_yes;
         self.votes.insert(
             account_id.clone(),
             VotedStake {
