@@ -44,8 +44,8 @@ pub struct Contract {
     proposal: String,
     deadline_timestamp_ms: Timestamp,
     votes: HashMap<AccountId, VotedStake>,
-    yes_stake: Balance,         // YES voted stake
-    total_voted_stake: Balance, // YES + NO
+    yes_stake: Balance,         // stake voted for YES
+    total_voted_stake: Balance, // total voted stake for YES or NO
     result: Option<bool>,
     last_epoch_height: EpochHeight,
 }
