@@ -731,6 +731,8 @@ mod tests {
         // vote at epoch 1
         vote(&mut contract, Vote::Yes, &validator(3));
         vote(&mut contract, Vote::No, &validator(4));
+        assert_eq!(contract.get_votes().len(), 2);
+        assert_eq!(contract.get_total_voted_stake(), (U128(30), U128(40), U128(120)));
 
         // ping at epoch 2 after deadline
         set_context(
@@ -758,6 +760,8 @@ mod tests {
         // vote at epoch 1
         vote(&mut contract, Vote::Yes, &validator(1));
         vote(&mut contract, Vote::No, &validator(2));
+        assert_eq!(contract.get_votes().len(), 2);
+        assert_eq!(contract.get_total_voted_stake(), (U128(50), U128(80), U128(120)));
 
         // ping at epoch 2 after deadline
         set_context(
@@ -777,6 +781,7 @@ mod tests {
             (validator(2).to_string(), NearToken::from_yoctonear(30)),
             (validator(3).to_string(), NearToken::from_yoctonear(30)),
             (validator(4).to_string(), NearToken::from_yoctonear(10)),
+            (validator(4).to_string(), NearToken::from_yoctonear(20)),
         ]);
         let mut context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
@@ -786,12 +791,20 @@ mod tests {
         vote(&mut contract, Vote::Yes, &validator(1));
         vote(&mut contract, Vote::Yes, &validator(2));
         vote(&mut contract, Vote::No, &validator(4));
+        assert_eq!(contract.get_votes().len(), 3);
+        assert_eq!(contract.get_total_voted_stake(), (U128(80), U128(90), U128(140)));
 
-        // ping at epoch 2 after deadline
+        // vote at epoch 2
+        vote(&mut contract, Vote::No, &validator(3));
+        vote(&mut contract, Vote::Yes, &validator(4));
+        assert_eq!(contract.get_votes().len(), 3);
+        assert_eq!(contract.get_total_voted_stake(), (U128(90), U128(120), U128(140)));
+
+        // ping at epoch 3 after deadline
         set_context(
             context
                 .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
-                .epoch_height(2),
+                .epoch_height(3),
             &validators,
         );
         contract.ping();
