@@ -15,7 +15,8 @@ type Balance = u128;
 /// Timestamp in milliseconds
 type Timestamp = u64;
 
-#[near(serializers = [json])]
+#[derive(PartialEq, Clone, Debug)]
+#[near(serializers = [borsh, json])]
 #[serde(rename_all = "lowercase")]
 pub enum Vote {
     Yes,
@@ -85,7 +86,7 @@ impl Contract {
                     self.yes_stake += account_current_stake;
                 }
                 *voted_stake = VotedStake {
-                    vote: voted_stake.vote,
+                    vote: voted_stake.vote.clone(),
                     stake: account_current_stake,
                 };
             }
@@ -139,29 +140,31 @@ impl Contract {
             Vote::No => 0,
         };
 
-        let voted_stake = self.votes.get(&account_id).unwrap_or_default();
+        let prev_stake = if let Some(voted_stake) = self.votes.get(&account_id) {
+            voted_stake.stake
+        } else {
+            0
+        };
         require!(
-            voted_stake.stake <= self.total_voted_stake,
+            prev_stake <= self.total_voted_stake,
             format!(
                 "invariant: voted stake {} is more than total voted stake {}",
-                voted_stake.stake, self.total_voted_stake
+                prev_stake, self.total_voted_stake
             )
         );
-        self.total_voted_stake = self.total_voted_stake + account_stake - voted_stake.stake;
+        self.total_voted_stake = self.total_voted_stake + account_stake - prev_stake;
         if vote == Vote::Yes {
-            self.yes_stake = self.yes_stake + account_stake - voted_stake.stake;
+            self.yes_stake = self.yes_stake + account_stake - prev_stake;
         }
-        if account_stake > 0 {
-            self.votes.insert(
-                account_id.clone(),
-                VotedStake {
-                    vote,
-                    stake: account_stake,
-                },
-            );
-            self.check_result();
-        }
-        // emit event
+        self.votes.insert(
+            account_id.clone(),
+            VotedStake {
+                vote: vote.clone(),
+                stake: account_stake,
+            },
+        );
+        self.check_result();
+
         Event::Voted {
             validator_id: &account_id,
             vote: &vote,
@@ -179,7 +182,9 @@ impl Contract {
             return;
         }
         let total_stake = validator_total_stake();
-        if self.total_voted_stake > total_stake / 3 && self.yes_stake > total_voted_stake * 2 / 3 {
+        if self.total_voted_stake > total_stake / 3
+            && self.yes_stake > self.total_voted_stake * 2 / 3
+        {
             self.result = Some(env::block_timestamp_ms());
             Event::ProposalApproved {
                 proposal: &self.proposal,
@@ -198,11 +203,12 @@ impl Contract {
 /// View methods
 #[near]
 impl Contract {
-    /// Returns a pair of `total_voted_stake` and the total stake.
+    /// Returns a triple of (`yes_stake`, `total_voted_stake`, the total stake).
     /// Note: as a view method, it doesn't recompute the active stake. May need to call `ping` to
     /// update the active stake.
-    pub fn get_total_voted_stake(&self) -> (U128, U128) {
+    pub fn get_total_voted_stake(&self) -> (U128, U128, U128) {
         (
+            self.yes_stake.into(),
             self.total_voted_stake.into(),
             validator_total_stake().into(),
         )
@@ -211,10 +217,15 @@ impl Contract {
     /// Returns all active votes.
     /// Note: as a view method, it doesn't recompute the active stake. May need to call `ping` to
     /// update the active stake.
-    pub fn get_votes(&self) -> HashMap<AccountId, U128> {
+    pub fn get_votes(&self) -> HashMap<AccountId, (Vote, U128)> {
         self.votes
             .iter()
-            .map(|(account_id, stake)| (account_id.clone(), (*stake).into()))
+            .map(|(account_id, voted_stake)| {
+                (
+                    account_id.clone(),
+                    (voted_stake.vote.clone(), voted_stake.stake.into()),
+                )
+            })
             .collect()
     }
 
@@ -415,11 +426,16 @@ mod tests {
             set_context(&context);
             assert_eq!(
                 contract.get_total_voted_stake(),
-                (U128::from(10 * (i + 1) as u128), U128::from(3000))
+                (
+                    U128::from(10 * (i + 1) as u128),
+                    U128::from(10 * (i + 1) as u128),
+                    U128::from(3000)
+                )
             );
             // check votes
-            let expected_votes: HashMap<AccountId, U128> =
-                (0..=i).map(|j| (validator(j), U128::from(10))).collect();
+            let expected_votes: HashMap<AccountId, (Vote, U128)> = (0..=i)
+                .map(|j| (validator(j), (Vote::Yes, U128::from(10))))
+                .collect();
             assert_eq!(contract.get_votes(), expected_votes);
             assert_eq!(contract.get_votes().len() as u64, i + 1);
             // check voting result
