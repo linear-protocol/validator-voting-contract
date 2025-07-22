@@ -22,6 +22,12 @@ pub enum Vote {
     No,
 }
 
+#[near(serializers = [borsh, json])]
+pub struct VotedStake {
+    vote: Vote,
+    stake: Balance,
+}
+
 const GET_OWNER_ID_GAS: Gas = Gas::from_tgas(5);
 
 #[ext_contract(ext_staking_pool)]
@@ -36,8 +42,9 @@ pub trait StakingPoolContract {
 pub struct Contract {
     proposal: String,
     deadline_timestamp_ms: Timestamp,
-    votes: HashMap<AccountId, Balance>,
-    total_voted_stake: Balance,
+    votes: HashMap<AccountId, VotedStake>,
+    yes_stake: Balance,         // YES voted stake
+    total_voted_stake: Balance, // YES + NO
     result: Option<Timestamp>,
     last_epoch_height: EpochHeight,
 }
@@ -57,6 +64,7 @@ impl Contract {
             proposal,
             deadline_timestamp_ms,
             votes: HashMap::new(),
+            yes_stake: 0,
             total_voted_stake: 0,
             result: None,
             last_epoch_height: 0,
@@ -65,18 +73,21 @@ impl Contract {
 
     /// Ping to update the votes according to current stake of validators.
     pub fn ping(&mut self) {
-        require!(
-            env::block_timestamp_ms() < self.deadline_timestamp_ms,
-            "Voting deadline has already passed"
-        );
         require!(self.result.is_none(), "Voting has already ended");
         let cur_epoch_height = env::epoch_height();
         if cur_epoch_height != self.last_epoch_height {
             self.total_voted_stake = 0;
-            for (account_id, stake) in self.votes.iter_mut() {
+            self.yes_stake = 0;
+            for (account_id, voted_stake) in self.votes.iter_mut() {
                 let account_current_stake = validator_stake(account_id);
                 self.total_voted_stake += account_current_stake;
-                *stake = account_current_stake;
+                if voted_stake.vote == Vote::Yes {
+                    self.yes_stake += account_current_stake;
+                }
+                *voted_stake = VotedStake {
+                    vote: voted_stake.vote,
+                    stake: account_current_stake,
+                };
             }
             self.check_result();
             self.last_epoch_height = cur_epoch_height;
@@ -128,17 +139,26 @@ impl Contract {
             Vote::No => 0,
         };
 
-        let voted_stake = self.votes.remove(&account_id).unwrap_or_default();
+        let voted_stake = self.votes.get(&account_id).unwrap_or_default();
         require!(
-            voted_stake <= self.total_voted_stake,
+            voted_stake.stake <= self.total_voted_stake,
             format!(
                 "invariant: voted stake {} is more than total voted stake {}",
-                voted_stake, self.total_voted_stake
+                voted_stake.stake, self.total_voted_stake
             )
         );
-        self.total_voted_stake = self.total_voted_stake + account_stake - voted_stake;
+        self.total_voted_stake = self.total_voted_stake + account_stake - voted_stake.stake;
+        if vote == Vote::Yes {
+            self.yes_stake = self.yes_stake + account_stake - voted_stake.stake;
+        }
         if account_stake > 0 {
-            self.votes.insert(account_id.clone(), account_stake);
+            self.votes.insert(
+                account_id.clone(),
+                VotedStake {
+                    vote,
+                    stake: account_stake,
+                },
+            );
             self.check_result();
         }
         // emit event
@@ -155,13 +175,17 @@ impl Contract {
             self.result.is_none(),
             "check result is called after result is already set"
         );
+        if env::block_timestamp_ms() < self.deadline_timestamp_ms {
+            return;
+        }
         let total_stake = validator_total_stake();
-        if self.total_voted_stake > total_stake * 2 / 3 {
+        if self.total_voted_stake > total_stake / 3 && self.yes_stake > total_voted_stake * 2 / 3 {
             self.result = Some(env::block_timestamp_ms());
             Event::ProposalApproved {
                 proposal: &self.proposal,
                 approval_timestamp_ms: &U64::from(env::block_timestamp_ms()),
                 deadline_timestamp_ms: &U64::from(self.deadline_timestamp_ms),
+                yes_stake: &U128::from(self.yes_stake),
                 voted_stake: &U128::from(self.total_voted_stake),
                 total_stake: &U128::from(total_stake),
                 num_votes: &U64::from(self.votes.len() as u64),

@@ -24,6 +24,7 @@ pub enum Event<'a> {
         proposal: &'a String,
         approval_timestamp_ms: &'a U64,
         deadline_timestamp_ms: &'a U64,
+        yes_stake: &'a U128,
         voted_stake: &'a U128,
         total_stake: &'a U128,
         num_votes: &'a U64,
