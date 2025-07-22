@@ -415,12 +415,14 @@ mod tests {
         assert!(contract.get_result().is_none());
 
         // ping at epoch 2 after deadline
-        set_context(
+        set_context_and_validators(
             context
                 .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
                 .epoch_height(2),
+            &validators,
         );
         contract.ping();
+        assert_eq!(contract.get_result().unwrap(), true);
 
         // ping again. should panic because voting has ended
         contract.ping();
@@ -473,11 +475,20 @@ mod tests {
             // check voting result
             assert!(contract.get_result().is_none());
         }
+
+        // ping at epoch 2 after deadline
+        set_context(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(2),
+        );
+        contract.ping();
+        assert_eq!(contract.get_result().unwrap(), true);
     }
 
     #[test]
     fn test_voting_with_epoch_change() {
-        let context = get_context(&voting_contract_id());
+        let mut context = get_context(&voting_contract_id());
         set_context(&context);
         let mut contract = get_contract();
 
@@ -491,6 +502,15 @@ mod tests {
             // voting result is none since deadline has not passed
             assert!(contract.get_result().is_none());
         }
+
+        // ping at epoch 2 after deadline
+        set_context(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(2),
+        );
+        contract.ping();
+        assert_eq!(contract.get_result().unwrap(), true);
     }
 
     #[test]
@@ -500,18 +520,32 @@ mod tests {
             (validator(2).to_string(), NearToken::from_yoctonear(10)),
             (validator(3).to_string(), NearToken::from_yoctonear(10)),
         ]);
-        // vote at epoch 1
+
         let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
-        vote(&mut contract, Vote::Yes, &validator(1));
+        // validator 2 votes YES at epoch 1
+        vote(&mut contract, Vote::Yes, &validator(2));
+        // validator 3 votes NO at epoch 1
+        vote(&mut contract, Vote::No, &validator(3));
+    
         // ping at epoch 2
-        validators.insert(validator(1).to_string(), NearToken::from_yoctonear(50));
-        let context = get_context_with_epoch_height(&voting_contract_id(), 2);
+        validators.insert(validator(2).to_string(), NearToken::from_yoctonear(25));
+        let mut context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         contract.ping();
         // voting result is none since deadline has not passed
         assert!(contract.get_result().is_none());
+
+        // ping at epoch 3 after deadline
+        set_context_and_validators(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(3),
+            &validators
+        );
+        contract.ping();
+        assert_eq!(contract.get_result().unwrap(), true);
     }
 
     #[test]
@@ -523,19 +557,25 @@ mod tests {
         let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
+
         // vote YES at epoch 1
         vote(&mut contract, Vote::Yes, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
+        assert_eq!(contract.get_total_voted_stake(), (U128(10), U128(10), U128(20)));
+
         // vote NO at epoch 2
         let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         vote(&mut contract, Vote::No, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
+        assert_eq!(contract.get_total_voted_stake(), (U128(0), U128(10), U128(20)));
+
         // vote YES at epoch 3
         let context = get_context_with_epoch_height(&voting_contract_id(), 3);
         set_context_and_validators(&context, &validators);
         vote(&mut contract, Vote::Yes, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
+        assert_eq!(contract.get_total_voted_stake(), (U128(10), U128(10), U128(20)));
     }
 
     #[test]
@@ -548,25 +588,28 @@ mod tests {
         let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
+
         // vote at epoch 1
         vote(&mut contract, Vote::Yes, &validator(1));
-        assert_eq!((contract.get_total_voted_stake().0).0, 40);
+        assert_eq!(contract.get_total_voted_stake(), (U128(40), U128(40), U128(60)));
         assert_eq!(contract.get_votes().len(), 1);
-        // remove validator at epoch 2
+
+        // remove validator 1 at epoch 2, i.e. validator 1 is kicked out
         validators.remove(&validator(1).to_string());
         let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         // ping will update total voted stake
         contract.ping();
-        assert_eq!((contract.get_total_voted_stake().0).0, 0);
+        assert_eq!(contract.get_total_voted_stake(), (U128(0), U128(0), U128(20)));
         assert_eq!(contract.get_votes().len(), 1);
+
         // validator(1) is back to validator set at epoch 3
         validators.insert(validator(1).to_string(), NearToken::from_yoctonear(40));
         let context = get_context_with_epoch_height(&voting_contract_id(), 3);
         set_context_and_validators(&context, &validators);
         // ping will update total voted stake after validator(1) is back
         contract.ping();
-        assert_eq!((contract.get_total_voted_stake().0).0, 40);
+        assert_eq!(contract.get_total_voted_stake(), (U128(40), U128(40), U128(60)));
         assert_eq!(contract.get_votes().len(), 1);
     }
 
