@@ -2,10 +2,10 @@
 export OWNER_ID=mock-owner.testnet
 export VOTING_ACCOUNT_ID=mock-proposal-alpha.testnet
 
-for i in {1..1}; do
+for i in {1..10}; do
     VALIDATOR_ID="mock-vali-"${i}".testnet"
     # vote by validator
-    near contract call-function as-transaction $VOTING_ACCOUNT_ID vote json-args '{"staking_pool_id":"'$VALIDATOR_ID'","vote":"no"}' prepaid-gas '200.0 Tgas' attached-deposit '0 NEAR' sign-as $OWNER_ID network-config testnet sign-with-legacy-keychain send
+    near contract call-function as-transaction $VOTING_ACCOUNT_ID vote json-args '{"staking_pool_id":"'$VALIDATOR_ID'","vote":"yes"}' prepaid-gas '200.0 Tgas' attached-deposit '0 NEAR' sign-as $OWNER_ID network-config testnet sign-with-legacy-keychain send
 done
 
 # get total voted stake
