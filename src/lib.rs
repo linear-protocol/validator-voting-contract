@@ -267,6 +267,7 @@ impl Contract {
 }
 
 #[cfg(feature = "test")]
+/// Test methods
 #[near]
 impl Contract {
     pub fn set_validator_stake(&mut self, validator_account_id: AccountId, amount: U128) {

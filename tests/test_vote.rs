@@ -1,5 +1,7 @@
+use near_sdk::json_types::U128;
 use near_sdk::{AccountId, Gas, NearToken};
 use serde_json::json;
+use validator_voting::Vote;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -157,7 +159,7 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "total staked: {}, {:#?}",
             alice.id(),
-            total_staked.json::<String>()?
+            total_staked.json::<U128>()?
         );
     }
 
@@ -206,7 +208,7 @@ async fn test_many_votes() -> Result<(), Box<dyn std::error::Error>> {
             voting_contract
                 .view("get_votes")
                 .await?
-                .json::<HashMap<AccountId, String>>()?
+                .json::<HashMap<AccountId, (Vote, U128)>>()?
         );
     }
 
@@ -313,7 +315,7 @@ async fn test_vote_no_after_vote_yes() -> Result<(), Box<dyn std::error::Error>>
     );
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
-    assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 1);
+    assert_eq!(votes.json::<HashMap<AccountId, (Vote, U128)>>()?.len(), 1);
 
     let outcome = owner
         .call(voting_contract.id(), "vote")
@@ -332,7 +334,7 @@ async fn test_vote_no_after_vote_yes() -> Result<(), Box<dyn std::error::Error>>
     );
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
-    assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 0);
+    assert_eq!(votes.json::<HashMap<AccountId, (Vote, U128)>>()?.len(), 1);
 
     Ok(())
 }
@@ -384,7 +386,7 @@ async fn test_vote_yes_after_vote_no() -> Result<(), Box<dyn std::error::Error>>
     );
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
-    assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 0);
+    assert_eq!(votes.json::<HashMap<AccountId, (Vote, U128)>>()?.len(), 1);
 
     let outcome = owner
         .call(voting_contract.id(), "vote")
@@ -403,7 +405,7 @@ async fn test_vote_yes_after_vote_no() -> Result<(), Box<dyn std::error::Error>>
     );
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
-    assert_eq!(votes.json::<HashMap<AccountId, String>>()?.len(), 1);
+    assert_eq!(votes.json::<HashMap<AccountId, (Vote, U128)>>()?.len(), 1);
 
     Ok(())
 }
@@ -469,7 +471,7 @@ async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
-    let votes = votes.json::<HashMap<AccountId, String>>()?;
+    let votes = votes.json::<HashMap<AccountId, (Vote, U128)>>()?;
     assert_eq!(votes.len(), 1);
     assert!(votes.contains_key(staking_pool_contracts[0].id()));
 
@@ -492,7 +494,7 @@ async fn test_unstake_after_voting() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let votes = owner.view(voting_contract.id(), "get_votes").await?;
-    let votes = votes.json::<HashMap<AccountId, String>>()?;
+    let votes = votes.json::<HashMap<AccountId, (Vote, U128)>>()?;
     assert_eq!(votes.len(), 2);
     assert!(votes.contains_key(staking_pool_contracts[1].id()));
 
