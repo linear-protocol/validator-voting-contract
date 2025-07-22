@@ -191,7 +191,11 @@ impl Contract {
             return;
         }
         let total_stake = validator_total_stake();
-        let num_votes_yes = self.votes.iter().filter(|(_, v)| v.vote == Vote::Yes).count() as u64;
+        let num_votes_yes = self
+            .votes
+            .iter()
+            .filter(|(_, v)| v.vote == Vote::Yes)
+            .count() as u64;
         if self.total_voted_stake > total_stake / 3
             && self.yes_stake > self.total_voted_stake * 2 / 3
         {
