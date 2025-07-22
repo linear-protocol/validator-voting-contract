@@ -98,6 +98,11 @@ impl Contract {
     /// Method for validators to vote with `Yes` or `No`.
     /// The method is called by validator owners.
     pub fn vote(&mut self, vote: Vote, staking_pool_id: AccountId) -> Promise {
+        require!(
+            env::block_timestamp_ms() < self.deadline_timestamp_ms,
+            "Voting deadline has already passed"
+        );
+
         ext_staking_pool::ext(staking_pool_id.clone())
             .with_static_gas(GET_OWNER_ID_GAS)
             .get_owner_id()
@@ -505,7 +510,7 @@ mod tests {
         let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         vote(&mut contract, Vote::No, &validator(1));
-        assert!(contract.get_votes().is_empty());
+        assert_eq!(contract.get_votes().len(), 1);
         // vote YES at epoch 3
         let context = get_context_with_epoch_height(&voting_contract_id(), 3);
         set_context_and_validators(&context, &validators);
@@ -583,7 +588,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Voting deadline has already passed")]
     fn test_ping_after_deadline() {
         let mut contract = get_contract();
         let mut context = get_context(&voting_contract_id());
@@ -599,5 +603,8 @@ mod tests {
                 .epoch_height(2),
         );
         contract.ping();
+
+        // has vote result
+        assert!(contract.get_result().is_some());
     }
 }
