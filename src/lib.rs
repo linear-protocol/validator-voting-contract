@@ -191,6 +191,7 @@ impl Contract {
             return;
         }
         let total_stake = validator_total_stake();
+        let num_votes_yes = self.votes.iter().filter(|(_, v)| v.vote == Vote::Yes).count() as u64;
         if self.total_voted_stake > total_stake / 3
             && self.yes_stake > self.total_voted_stake * 2 / 3
         {
@@ -202,7 +203,8 @@ impl Contract {
                 yes_stake: &U128::from(self.yes_stake),
                 voted_stake: &U128::from(self.total_voted_stake),
                 total_stake: &U128::from(total_stake),
-                num_votes: &U64::from(self.votes.len() as u64),
+                num_votes_yes: &U64::from(num_votes_yes),
+                num_votes_total: &U64::from(self.votes.len() as u64),
             }
             .emit();
         } else {
@@ -214,7 +216,8 @@ impl Contract {
                 yes_stake: &U128::from(self.yes_stake),
                 voted_stake: &U128::from(self.total_voted_stake),
                 total_stake: &U128::from(total_stake),
-                num_votes: &U64::from(self.votes.len() as u64),
+                num_votes_yes: &U64::from(num_votes_yes),
+                num_votes_total: &U64::from(self.votes.len() as u64),
             }
             .emit();
         }

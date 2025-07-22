@@ -27,7 +27,8 @@ pub enum Event<'a> {
         yes_stake: &'a U128,
         voted_stake: &'a U128,
         total_stake: &'a U128,
-        num_votes: &'a U64,
+        num_votes_yes: &'a U64,
+        num_votes_total: &'a U64,
     },
     ProposalRejected {
         proposal: &'a String,
@@ -36,7 +37,8 @@ pub enum Event<'a> {
         yes_stake: &'a U128,
         voted_stake: &'a U128,
         total_stake: &'a U128,
-        num_votes: &'a U64,
+        num_votes_yes: &'a U64,
+        num_votes_total: &'a U64,
     },
 }
 
