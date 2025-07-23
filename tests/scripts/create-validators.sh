@@ -1,12 +1,13 @@
 #!/bin/bash
+export SUFFIX=delta
 export MOCK_STAKING_POOL_CONTRACT=./contracts/mock-staking-pool/target/near/mock_staking_pool.wasm
 export OWNER_ID=mock-owner.testnet
 export STAKE_ACCOUNT_ID=mock-staker.testnet
-export VOTING_ACCOUNT_ID=mock-proposal-alpha.testnet
+export VOTING_ACCOUNT_ID="mock-proposal-"$SUFFIX".testnet"
 export STAKE_PUBLIC_KEY=ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp
 
 for i in {1..10}; do
-    VALIDATOR_ID="mock-vali-"${i}".testnet"
+    VALIDATOR_ID="mock-node-"$SUFFIX"-"${i}".testnet"
     # create validator account
     # near account create-account sponsor-by-faucet-service $VALIDATOR_ID autogenerate-new-keypair save-to-legacy-keychain network-config testnet create
     near account create-account fund-myself $VALIDATOR_ID '2 NEAR' autogenerate-new-keypair save-to-legacy-keychain sign-as $STAKE_ACCOUNT_ID network-config testnet sign-with-legacy-keychain send
