@@ -87,9 +87,9 @@ impl Contract {
                 }
                 voted_stake.stake = account_current_stake;
             }
-            self.check_result();
             self.last_epoch_height = cur_epoch_height;
         }
+        self.check_result();
     }
 
     /// Method for validators to vote with `Yes` or `No`.
