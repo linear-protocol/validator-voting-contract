@@ -7,13 +7,13 @@ The purpose of this contract is for validators to vote on any specific proposal.
 Install [`cargo-near`](https://github.com/near/cargo-near) and run:
 
 ```bash
-cargo near build
+make
 ```
 
 ## Test
 
 ```bash
-cargo test
+make test
 ```
 
 ## Deploy
