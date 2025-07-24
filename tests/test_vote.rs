@@ -130,6 +130,10 @@ async fn test_simple_vote() -> Result<(), Box<dyn std::error::Error>> {
         "{:#?}",
         outcome.into_result().unwrap_err()
     );
+    // print logs emitted by the contract
+    for log in outcome.logs() {
+        println!("contract log: {}", log);
+    }
 
     Ok(())
 }

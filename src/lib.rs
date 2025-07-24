@@ -97,6 +97,7 @@ impl Contract {
     pub fn vote(&mut self, vote: Vote, staking_pool_id: AccountId) -> Promise {
         ext_staking_pool::ext(staking_pool_id.clone())
             .with_static_gas(GET_OWNER_ID_GAS)
+            .with_unused_gas_weight(0)
             .get_owner_id()
             .then(Self::ext(env::current_account_id()).on_get_pool_owner_id(
                 env::predecessor_account_id(),
@@ -460,6 +461,8 @@ mod tests {
 
         for i in 0..201 {
             // vote by each validator
+            let mut context = get_context(&voting_contract_id());
+            set_context(&context);
             let voter = validator(i);
             vote(&mut contract, Vote::Yes, &voter);
 
