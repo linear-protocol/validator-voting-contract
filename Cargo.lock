@@ -3786,7 +3786,7 @@ checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 
 [[package]]
 name = "validator-voting"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "near-sdk",
  "near-workspaces",

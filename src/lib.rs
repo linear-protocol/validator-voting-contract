@@ -15,11 +15,18 @@ type Balance = u128;
 /// Timestamp in milliseconds
 type Timestamp = u64;
 
-#[near(serializers = [json])]
+#[derive(PartialEq, Clone, Debug)]
+#[near(serializers = [borsh, json])]
 #[serde(rename_all = "lowercase")]
 pub enum Vote {
     Yes,
     No,
+}
+
+#[near(serializers = [borsh, json])]
+pub struct VotedStake {
+    vote: Vote,
+    stake: Balance,
 }
 
 const GET_OWNER_ID_GAS: Gas = Gas::from_tgas(5);
@@ -36,9 +43,10 @@ pub trait StakingPoolContract {
 pub struct Contract {
     proposal: String,
     deadline_timestamp_ms: Timestamp,
-    votes: HashMap<AccountId, Balance>,
-    total_voted_stake: Balance,
-    result: Option<Timestamp>,
+    votes: HashMap<AccountId, VotedStake>,
+    yes_stake: Balance,         // stake voted for YES
+    total_voted_stake: Balance, // total stake voted for YES or NO
+    result: Option<bool>,       // true if proposal is approved
     last_epoch_height: EpochHeight,
 }
 
@@ -57,6 +65,7 @@ impl Contract {
             proposal,
             deadline_timestamp_ms,
             votes: HashMap::new(),
+            yes_stake: 0,
             total_voted_stake: 0,
             result: None,
             last_epoch_height: 0,
@@ -65,22 +74,22 @@ impl Contract {
 
     /// Ping to update the votes according to current stake of validators.
     pub fn ping(&mut self) {
-        require!(
-            env::block_timestamp_ms() < self.deadline_timestamp_ms,
-            "Voting deadline has already passed"
-        );
         require!(self.result.is_none(), "Voting has already ended");
         let cur_epoch_height = env::epoch_height();
         if cur_epoch_height != self.last_epoch_height {
             self.total_voted_stake = 0;
-            for (account_id, stake) in self.votes.iter_mut() {
+            self.yes_stake = 0;
+            for (account_id, voted_stake) in self.votes.iter_mut() {
                 let account_current_stake = validator_stake(account_id);
                 self.total_voted_stake += account_current_stake;
-                *stake = account_current_stake;
+                if voted_stake.vote == Vote::Yes {
+                    self.yes_stake += account_current_stake;
+                }
+                voted_stake.stake = account_current_stake;
             }
-            self.check_result();
             self.last_epoch_height = cur_epoch_height;
         }
+        self.check_result();
     }
 
     /// Method for validators to vote with `Yes` or `No`.
@@ -88,6 +97,7 @@ impl Contract {
     pub fn vote(&mut self, vote: Vote, staking_pool_id: AccountId) -> Promise {
         ext_staking_pool::ext(staking_pool_id.clone())
             .with_static_gas(GET_OWNER_ID_GAS)
+            .with_unused_gas_weight(0)
             .get_owner_id()
             .then(Self::ext(env::current_account_id()).on_get_pool_owner_id(
                 env::predecessor_account_id(),
@@ -118,30 +128,53 @@ impl Contract {
 
     /// Internal method for voting.
     fn internal_vote(&mut self, vote: Vote, account_id: AccountId) {
+        require!(
+            env::block_timestamp_ms() < self.deadline_timestamp_ms,
+            "Voting deadline has already passed"
+        );
+
         self.ping();
 
-        let stake = validator_stake(&account_id);
-        require!(stake > 0, format!("{} is not a validator", account_id));
+        let account_stake = validator_stake(&account_id);
+        require!(
+            account_stake > 0,
+            format!("{} is not a validator", account_id)
+        );
 
-        let account_stake = match vote {
-            Vote::Yes => stake,
+        let account_stake_yes = match vote {
+            Vote::Yes => account_stake,
             Vote::No => 0,
         };
 
-        let voted_stake = self.votes.remove(&account_id).unwrap_or_default();
+        let (prev_stake, prev_stake_yes) = if let Some(voted_stake) = self.votes.get(&account_id) {
+            (
+                voted_stake.stake,
+                match voted_stake.vote {
+                    Vote::Yes => voted_stake.stake,
+                    Vote::No => 0,
+                },
+            )
+        } else {
+            (0, 0)
+        };
         require!(
-            voted_stake <= self.total_voted_stake,
+            prev_stake <= self.total_voted_stake,
             format!(
                 "invariant: voted stake {} is more than total voted stake {}",
-                voted_stake, self.total_voted_stake
+                prev_stake, self.total_voted_stake
             )
         );
-        self.total_voted_stake = self.total_voted_stake + account_stake - voted_stake;
-        if account_stake > 0 {
-            self.votes.insert(account_id.clone(), account_stake);
-            self.check_result();
-        }
-        // emit event
+        self.total_voted_stake = self.total_voted_stake + account_stake - prev_stake;
+        self.yes_stake = self.yes_stake + account_stake_yes - prev_stake_yes;
+        self.votes.insert(
+            account_id.clone(),
+            VotedStake {
+                vote: vote.clone(),
+                stake: account_stake,
+            },
+        );
+        self.check_result();
+
         Event::Voted {
             validator_id: &account_id,
             vote: &vote,
@@ -155,16 +188,41 @@ impl Contract {
             self.result.is_none(),
             "check result is called after result is already set"
         );
+        if env::block_timestamp_ms() < self.deadline_timestamp_ms {
+            return;
+        }
         let total_stake = validator_total_stake();
-        if self.total_voted_stake > total_stake * 2 / 3 {
-            self.result = Some(env::block_timestamp_ms());
+        let num_votes_yes = self
+            .votes
+            .iter()
+            .filter(|(_, v)| v.vote == Vote::Yes)
+            .count() as u64;
+        if self.total_voted_stake > total_stake / 3
+            && self.yes_stake > self.total_voted_stake * 2 / 3
+        {
+            self.result = Some(true);
             Event::ProposalApproved {
                 proposal: &self.proposal,
                 approval_timestamp_ms: &U64::from(env::block_timestamp_ms()),
                 deadline_timestamp_ms: &U64::from(self.deadline_timestamp_ms),
+                yes_stake: &U128::from(self.yes_stake),
                 voted_stake: &U128::from(self.total_voted_stake),
                 total_stake: &U128::from(total_stake),
-                num_votes: &U64::from(self.votes.len() as u64),
+                num_votes_yes: &U64::from(num_votes_yes),
+                num_votes_total: &U64::from(self.votes.len() as u64),
+            }
+            .emit();
+        } else {
+            self.result = Some(false);
+            Event::ProposalRejected {
+                proposal: &self.proposal,
+                rejection_timestamp_ms: &U64::from(env::block_timestamp_ms()),
+                deadline_timestamp_ms: &U64::from(self.deadline_timestamp_ms),
+                yes_stake: &U128::from(self.yes_stake),
+                voted_stake: &U128::from(self.total_voted_stake),
+                total_stake: &U128::from(total_stake),
+                num_votes_yes: &U64::from(num_votes_yes),
+                num_votes_total: &U64::from(self.votes.len() as u64),
             }
             .emit();
         }
@@ -174,11 +232,12 @@ impl Contract {
 /// View methods
 #[near]
 impl Contract {
-    /// Returns a pair of `total_voted_stake` and the total stake.
+    /// Returns a triple of (`yes_stake`, `total_voted_stake`, the total stake).
     /// Note: as a view method, it doesn't recompute the active stake. May need to call `ping` to
     /// update the active stake.
-    pub fn get_total_voted_stake(&self) -> (U128, U128) {
+    pub fn get_total_voted_stake(&self) -> (U128, U128, U128) {
         (
+            self.yes_stake.into(),
             self.total_voted_stake.into(),
             validator_total_stake().into(),
         )
@@ -187,15 +246,20 @@ impl Contract {
     /// Returns all active votes.
     /// Note: as a view method, it doesn't recompute the active stake. May need to call `ping` to
     /// update the active stake.
-    pub fn get_votes(&self) -> HashMap<AccountId, U128> {
+    pub fn get_votes(&self) -> HashMap<AccountId, (Vote, U128)> {
         self.votes
             .iter()
-            .map(|(account_id, stake)| (account_id.clone(), (*stake).into()))
+            .map(|(account_id, voted_stake)| {
+                (
+                    account_id.clone(),
+                    (voted_stake.vote.clone(), voted_stake.stake.into()),
+                )
+            })
             .collect()
     }
 
-    /// Get the timestamp of when the voting finishes. `None` means the voting hasn't ended yet.
-    pub fn get_result(&self) -> Option<Timestamp> {
+    /// Get the voting result. `None` means the voting hasn't ended yet.
+    pub fn get_result(&self) -> Option<bool> {
         self.result
     }
 
@@ -211,6 +275,7 @@ impl Contract {
 }
 
 #[cfg(feature = "test")]
+/// Test methods
 #[near]
 impl Contract {
     pub fn set_validator_stake(&mut self, validator_account_id: AccountId, amount: U128) {
@@ -343,9 +408,9 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Voting has already ended")]
-    fn test_vote_again_after_voting_ends() {
+    fn test_ping_again_after_voting_ends() {
         let validator_id = validator(0);
-        let context = get_context(&voting_contract_id());
+        let mut context = get_context(&voting_contract_id());
         let validators = HashMap::from_iter(vec![(
             validator_id.to_string(),
             NearToken::from_yoctonear(100),
@@ -354,9 +419,22 @@ mod tests {
         let mut contract = get_contract();
         // vote
         vote(&mut contract, Vote::Yes, &validator_id);
-        assert!(contract.get_result().is_some());
-        // vote again. should panic because voting has ended
-        vote(&mut contract, Vote::Yes, &validator_id);
+        // vote result is none because deadline has not passed,
+        // although all validators have voted
+        assert!(contract.get_result().is_none());
+
+        // ping at epoch 2 after deadline
+        set_context_and_validators(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(2),
+            &validators,
+        );
+        contract.ping();
+        assert!(contract.get_result().unwrap());
+
+        // ping again. should panic because voting has ended
+        contract.ping();
     }
 
     #[test]
@@ -383,6 +461,8 @@ mod tests {
 
         for i in 0..201 {
             // vote by each validator
+            let mut context = get_context(&voting_contract_id());
+            set_context(&context);
             let voter = validator(i);
             vote(&mut contract, Vote::Yes, &voter);
 
@@ -391,25 +471,35 @@ mod tests {
             set_context(&context);
             assert_eq!(
                 contract.get_total_voted_stake(),
-                (U128::from(10 * (i + 1) as u128), U128::from(3000))
+                (
+                    U128::from(10 * (i + 1) as u128),
+                    U128::from(10 * (i + 1) as u128),
+                    U128::from(3000)
+                )
             );
             // check votes
-            let expected_votes: HashMap<AccountId, U128> =
-                (0..=i).map(|j| (validator(j), U128::from(10))).collect();
+            let expected_votes: HashMap<AccountId, (Vote, U128)> = (0..=i)
+                .map(|j| (validator(j), (Vote::Yes, U128::from(10))))
+                .collect();
             assert_eq!(contract.get_votes(), expected_votes);
             assert_eq!(contract.get_votes().len() as u64, i + 1);
             // check voting result
-            if i < 200 {
-                assert!(contract.get_result().is_none());
-            } else {
-                assert!(contract.get_result().is_some());
-            }
+            assert!(contract.get_result().is_none());
         }
+
+        // ping at epoch 2 after deadline
+        set_context(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(2),
+        );
+        contract.ping();
+        assert!(contract.get_result().unwrap());
     }
 
     #[test]
     fn test_voting_with_epoch_change() {
-        let context = get_context(&voting_contract_id());
+        let mut context = get_context(&voting_contract_id());
         set_context(&context);
         let mut contract = get_contract();
 
@@ -420,13 +510,18 @@ mod tests {
             vote(&mut contract, Vote::Yes, &validator(i));
             // check votes
             assert_eq!(contract.get_votes().len() as u64, i + 1);
-            // check voting result
-            if i < 200 {
-                assert!(contract.get_result().is_none());
-            } else {
-                assert!(contract.get_result().is_some());
-            }
+            // voting result is none since deadline has not passed
+            assert!(contract.get_result().is_none());
         }
+
+        // ping at epoch 2 after deadline
+        set_context(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(2),
+        );
+        contract.ping();
+        assert!(contract.get_result().unwrap());
     }
 
     #[test]
@@ -436,17 +531,32 @@ mod tests {
             (validator(2).to_string(), NearToken::from_yoctonear(10)),
             (validator(3).to_string(), NearToken::from_yoctonear(10)),
         ]);
-        // vote at epoch 1
+
         let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
-        vote(&mut contract, Vote::Yes, &validator(1));
+        // validator 2 votes YES at epoch 1
+        vote(&mut contract, Vote::Yes, &validator(2));
+        // validator 3 votes NO at epoch 1
+        vote(&mut contract, Vote::No, &validator(3));
+
         // ping at epoch 2
-        validators.insert(validator(1).to_string(), NearToken::from_yoctonear(50));
-        let context = get_context_with_epoch_height(&voting_contract_id(), 2);
+        validators.insert(validator(2).to_string(), NearToken::from_yoctonear(25));
+        let mut context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         contract.ping();
-        assert!(contract.get_result().is_some());
+        // voting result is none since deadline has not passed
+        assert!(contract.get_result().is_none());
+
+        // ping at epoch 3 after deadline
+        set_context_and_validators(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(3),
+            &validators,
+        );
+        contract.ping();
+        assert!(contract.get_result().unwrap());
     }
 
     #[test]
@@ -458,19 +568,34 @@ mod tests {
         let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
+
         // vote YES at epoch 1
         vote(&mut contract, Vote::Yes, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(10), U128(10), U128(20))
+        );
+
         // vote NO at epoch 2
         let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         vote(&mut contract, Vote::No, &validator(1));
-        assert!(contract.get_votes().is_empty());
+        assert_eq!(contract.get_votes().len(), 1);
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(0), U128(10), U128(20))
+        );
+
         // vote YES at epoch 3
         let context = get_context_with_epoch_height(&voting_contract_id(), 3);
         set_context_and_validators(&context, &validators);
         vote(&mut contract, Vote::Yes, &validator(1));
         assert_eq!(contract.get_votes().len(), 1);
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(10), U128(10), U128(20))
+        );
     }
 
     #[test]
@@ -483,25 +608,37 @@ mod tests {
         let context = get_context_with_epoch_height(&voting_contract_id(), 1);
         set_context_and_validators(&context, &validators);
         let mut contract = get_contract();
+
         // vote at epoch 1
         vote(&mut contract, Vote::Yes, &validator(1));
-        assert_eq!((contract.get_total_voted_stake().0).0, 40);
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(40), U128(40), U128(60))
+        );
         assert_eq!(contract.get_votes().len(), 1);
-        // remove validator at epoch 2
+
+        // remove validator 1 at epoch 2, i.e. validator 1 is kicked out
         validators.remove(&validator(1).to_string());
         let context = get_context_with_epoch_height(&voting_contract_id(), 2);
         set_context_and_validators(&context, &validators);
         // ping will update total voted stake
         contract.ping();
-        assert_eq!((contract.get_total_voted_stake().0).0, 0);
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(0), U128(0), U128(20))
+        );
         assert_eq!(contract.get_votes().len(), 1);
+
         // validator(1) is back to validator set at epoch 3
         validators.insert(validator(1).to_string(), NearToken::from_yoctonear(40));
         let context = get_context_with_epoch_height(&voting_contract_id(), 3);
         set_context_and_validators(&context, &validators);
         // ping will update total voted stake after validator(1) is back
         contract.ping();
-        assert_eq!((contract.get_total_voted_stake().0).0, 40);
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(40), U128(40), U128(60))
+        );
         assert_eq!(contract.get_votes().len(), 1);
     }
 
@@ -543,7 +680,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Voting deadline has already passed")]
     fn test_ping_after_deadline() {
         let mut contract = get_contract();
         let mut context = get_context(&voting_contract_id());
@@ -559,5 +695,111 @@ mod tests {
                 .epoch_height(2),
         );
         contract.ping();
+
+        // has vote result
+        assert!(contract.get_result().is_some());
+    }
+
+    #[test]
+    fn test_proposal_rejected_since_not_enough_total_voted_stake() {
+        let validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
+            (validator(1).to_string(), NearToken::from_yoctonear(50)),
+            (validator(2).to_string(), NearToken::from_yoctonear(30)),
+            (validator(3).to_string(), NearToken::from_yoctonear(30)),
+            (validator(4).to_string(), NearToken::from_yoctonear(10)),
+        ]);
+        let mut context = get_context_with_epoch_height(&voting_contract_id(), 1);
+        set_context_and_validators(&context, &validators);
+        let mut contract = get_contract();
+
+        // vote at epoch 1
+        set_context(&context);
+        vote(&mut contract, Vote::Yes, &validator(3));
+        vote(&mut contract, Vote::No, &validator(4));
+
+        // ping at epoch 2 after deadline
+        set_context_and_validators(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(2),
+            &validators,
+        );
+        contract.ping();
+        assert!(!contract.get_result().unwrap());
+    }
+
+    #[test]
+    fn test_proposal_rejected_since_not_enough_yes_stake() {
+        let validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
+            (validator(1).to_string(), NearToken::from_yoctonear(50)),
+            (validator(2).to_string(), NearToken::from_yoctonear(30)),
+            (validator(3).to_string(), NearToken::from_yoctonear(30)),
+            (validator(4).to_string(), NearToken::from_yoctonear(10)),
+        ]);
+        let mut context = get_context_with_epoch_height(&voting_contract_id(), 1);
+        set_context_and_validators(&context, &validators);
+        let mut contract = get_contract();
+
+        // vote at epoch 1
+        vote(&mut contract, Vote::Yes, &validator(1));
+        vote(&mut contract, Vote::No, &validator(2));
+        assert_eq!(contract.get_votes().len(), 2);
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(50), U128(80), U128(120))
+        );
+
+        // ping at epoch 2 after deadline
+        set_context_and_validators(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(2),
+            &validators,
+        );
+        contract.ping();
+        assert!(!contract.get_result().unwrap());
+    }
+
+    #[test]
+    fn test_proposal_approved() {
+        let validators: HashMap<String, NearToken> = HashMap::from_iter(vec![
+            (validator(1).to_string(), NearToken::from_yoctonear(50)),
+            (validator(2).to_string(), NearToken::from_yoctonear(30)),
+            (validator(3).to_string(), NearToken::from_yoctonear(30)),
+            (validator(4).to_string(), NearToken::from_yoctonear(10)),
+            (validator(5).to_string(), NearToken::from_yoctonear(20)),
+        ]);
+        let mut context = get_context_with_epoch_height(&voting_contract_id(), 1);
+        set_context_and_validators(&context, &validators);
+        let mut contract = get_contract();
+
+        // vote at epoch 1
+        vote(&mut contract, Vote::Yes, &validator(1));
+        vote(&mut contract, Vote::Yes, &validator(2));
+        vote(&mut contract, Vote::No, &validator(4));
+        assert_eq!(contract.get_votes().len(), 3);
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(80), U128(90), U128(140))
+        );
+
+        // vote at epoch 2
+        vote(&mut contract, Vote::No, &validator(3));
+        vote(&mut contract, Vote::Yes, &validator(4));
+        assert_eq!(contract.get_votes().len(), 4);
+        assert_eq!(
+            contract.get_total_voted_stake(),
+            (U128(90), U128(120), U128(140))
+        );
+
+        // ping at epoch 3 after deadline
+        set_context_and_validators(
+            context
+                .block_timestamp(env::block_timestamp_ms() + 2000 * 1_000_000)
+                .epoch_height(3),
+            &validators,
+        );
+        contract.ping();
+        assert!(contract.get_result().unwrap());
     }
 }
